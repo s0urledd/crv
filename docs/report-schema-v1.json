@@ -72,7 +72,7 @@
     "artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "format", "compression", "roles", "sizeBytes", "sha256", "sourceDatabase", "databases", "postgresSourceVersion", "postgresDumperVersion", "archiveCreatedAt", "spliceVersion", "offsets", "limitations"],
+      "required": ["path", "format", "compression", "roles", "sizeBytes", "sha256", "sourceDatabase", "databases", "postgresSourceVersion", "postgresDumperVersion", "archiveCreatedAt", "spliceVersion", "participantId", "identityStructureValid", "offsets", "limitations"],
       "properties": {
         "path": { "type": "string", "minLength": 1, "description": "Path relative to the backup-set root; standalone inspect uses the supplied path." },
         "format": { "enum": ["plain_dump", "custom_dump", "cluster_dump", "identities_json", "unknown"] },
@@ -91,6 +91,8 @@
         "postgresDumperVersion": { "type": ["string", "null"] },
         "archiveCreatedAt": { "type": ["string", "null"] },
         "spliceVersion": { "type": ["string", "null"] },
+        "participantId": { "type": ["string", "null"] },
+        "identityStructureValid": { "type": ["boolean", "null"] },
         "offsets": { "type": "array", "items": { "$ref": "#/$defs/offset" } },
         "limitations": { "type": "array", "items": { "type": "string" } }
       }

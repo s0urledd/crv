@@ -5,7 +5,6 @@ import { mkdtemp, open, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
-import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { UnsupportedInputError } from "./errors.js";
@@ -240,6 +239,38 @@ async function decodeToFile(source: string, compression: Exclude<ArtifactCompres
   await externalDecode(selected[0], [...selected[1]], destination);
 }
 
+function isStrictBase64(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+\/]*={0,2}$/.test(value)) return false;
+  try {
+    return Buffer.from(value, "base64").toString("base64") === value;
+  } catch {
+    return false;
+  }
+}
+
+function identityStructure(value: Record<string, unknown>): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (typeof value.id !== "string" || !value.id.startsWith("PAR::")) errors.push("id is not a canonical participant identifier");
+  if (typeof value.version !== "string" || value.version.length === 0) errors.push("version is missing or empty");
+  if (!isStrictBase64(value.authorizedStoreSnapshot)) errors.push("authorizedStoreSnapshot is not strict base64");
+  if (!Array.isArray(value.keys)) {
+    errors.push("keys is not an array");
+  } else {
+    const required = new Set(["namespace", "signing", "encryption"]);
+    for (const entry of value.keys) {
+      if (typeof entry !== "object" || entry === null) {
+        errors.push("keys contains a non-object entry");
+        continue;
+      }
+      const key = entry as Record<string, unknown>;
+      if (typeof key.name === "string") required.delete(key.name);
+      if (!isStrictBase64(key.keyPair)) errors.push("keyPair for " + String(key.name) + " is not strict base64");
+    }
+    if (required.size > 0) errors.push("required keys missing: " + [...required].sort().join(", "));
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 async function inspectIdentities(
   logicalPath: string,
   displayPath: string,
@@ -252,6 +283,7 @@ async function inspectIdentities(
   try {
     const value = JSON.parse(await readFile(logicalPath, "utf8")) as Record<string, unknown>;
     if (!("id" in value && "keys" in value && "version" in value && "authorizedStoreSnapshot" in value)) return null;
+    const structure = identityStructure(value);
     return {
       path: displayPath,
       format: "identities_json",
@@ -265,8 +297,10 @@ async function inspectIdentities(
       postgresDumperVersion: null,
       archiveCreatedAt: null,
       spliceVersion: typeof value.version === "string" ? value.version : null,
+      participantId: typeof value.id === "string" ? value.id : null,
+      identityStructureValid: structure.valid,
       offsets: [],
-      limitations: ["Party hint and successful re-onboarding are not intrinsic to this artifact."],
+      limitations: [...structure.errors, "Party hint and successful re-onboarding are not intrinsic to this artifact."],
     };
   } catch {
     return null;
@@ -301,6 +335,8 @@ async function inspectCustom(
       postgresDumperVersion: null,
       archiveCreatedAt: null,
       spliceVersion: null,
+      participantId: null,
+      identityStructureValid: null,
       offsets: [],
       limitations,
     };
@@ -331,6 +367,8 @@ async function inspectCustom(
     postgresDumperVersion: dumperVersion,
     archiveCreatedAt: createdAt,
     spliceVersion: null,
+    participantId: null,
+    identityStructureValid: null,
     offsets: offsetEvidence(parsed),
     limitations,
   };
@@ -357,7 +395,7 @@ async function inspectUncompressed(
     return {
       path: displayPath, format: "unknown", compression, roles: ["unknown"], sizeBytes, sha256: digest,
       sourceDatabase: null, databases: [], postgresSourceVersion: null, postgresDumperVersion: null,
-      archiveCreatedAt: null, spliceVersion: null, offsets: [], limitations: ["Artifact format is not recognized."],
+      archiveCreatedAt: null, spliceVersion: null, participantId: null, identityStructureValid: null, offsets: [], limitations: ["Artifact format is not recognized."],
     };
   }
 
@@ -377,6 +415,8 @@ async function inspectUncompressed(
       postgresDumperVersion: null,
       archiveCreatedAt: null,
       spliceVersion: null,
+      participantId: null,
+      identityStructureValid: null,
       offsets: [],
       limitations: ["Artifact format is not recognized."],
     };
@@ -395,6 +435,8 @@ async function inspectUncompressed(
     postgresDumperVersion: parsed.postgresDumperVersion,
     archiveCreatedAt: null,
     spliceVersion: null,
+    participantId: null,
+    identityStructureValid: null,
     offsets: offsetEvidence(parsed),
     limitations: parsed.cluster
       ? ["A pg_dumpall artifact is sequential, not a cross-database snapshot."]

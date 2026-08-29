@@ -57,6 +57,8 @@ export interface ArtifactInspection {
   postgresDumperVersion: string | null;
   archiveCreatedAt: string | null;
   spliceVersion: string | null;
+  participantId: string | null;
+  identityStructureValid: boolean | null;
   offsets: OffsetEvidence[];
   limitations: string[];
 }

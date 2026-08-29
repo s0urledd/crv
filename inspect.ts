@@ -19,6 +19,8 @@ export function formatInspection(artifact: ArtifactInspection): string {
     ["PostgreSQL dumper", value(artifact.postgresDumperVersion)],
     ["Archive created", value(artifact.archiveCreatedAt)],
     ["Splice version", value(artifact.spliceVersion)],
+    ["Participant ID", value(artifact.participantId)],
+    ["Identity structure", artifact.identityStructureValid === null ? "not applicable" : artifact.identityStructureValid ? "valid" : "invalid"],
   ];
   const width = Math.max(...rows.map(([label]) => label.length));
   const output = rows.map(([label, item]) => `${label.padEnd(width)}  ${item}`);
