@@ -348,8 +348,8 @@ async function inspectCustom(
   const sourceVersion = output.match(/^;\s+Dumped from database version:\s+(.+)$/m)?.[1]?.trim() ?? null;
   const dumperVersion = output.match(/^;\s+Dumped by pg_dump version:\s+(.+)$/m)?.[1]?.trim() ?? null;
   const parsed = emptySqlInspection();
-  for (const table of ["participant.lapi_parameters", "validator.store_last_ingested_offsets"]) {
-    const extracted = runPgRestore(["-a", "-t", table, logicalPath]);
+  for (const table of ["lapi_parameters", "store_last_ingested_offsets"]) {
+    const extracted = runPgRestore(["-a", "-t", table, "-f", "-", logicalPath]);
     if (extracted.status === 0 && extracted.stdout) mergeSql(parsed, parseSqlText(extracted.stdout, database));
   }
   if (parsed.roles.size === 0) limitations.push("The archive has no recognized CRV offset table or pg_restore could not extract it.");
