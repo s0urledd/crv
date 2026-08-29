@@ -1,0 +1,51 @@
+LocalNet: digital-asset/cn-quickstart@3c8ca2fe7e45fc692f089d57909944410fe0f61c
+Splice image tag: 0.6.11
+
+$ psql ... database list and owners
+mediator|cnadmin
+participant-app-provider|cnadmin
+participant-app-user|cnadmin
+participant-sv|cnadmin
+postgres|cnadmin
+scan|cnadmin
+sequencer|cnadmin
+sv|cnadmin
+validator-app-provider|cnadmin
+validator-app-user|cnadmin
+validator-sv|cnadmin
+
+$ psql -Atc 'show server_version'
+14.24
+
+$ /usr/bin/time docker exec postgres pg_dump ... validator-app-provider
+validator elapsed=0.42 maxrss_kb=28160
+$ /usr/bin/time docker exec postgres pg_dump ... participant-app-provider
+participant elapsed=0.80 maxrss_kb=28288
+$ /usr/bin/time docker exec postgres pg_dump -Fc ... validator-app-provider
+validator-custom elapsed=0.37
+
+$ wc -c ...
+167984 validator-app-provider.sql
+45577111 participant-app-provider.sql
+195580 validator-app-provider.dump
+
+$ sed -n '1,16p' validator-app-provider.sql
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 14.24 (Debian 14.24-1.pgdg13+1)
+-- Dumped by pg_dump version 14.24 (Debian 14.24-1.pgdg13+1)
+
+$ pg_restore -l validator-app-provider.dump | head
+;
+; Archive created at 2026-08-27 11:45:53 UTC
+;     dbname: validator-app-provider
+;     TOC Entries: 338
+;     Compression: gzip
+;     Dump Version: 1.14-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 14.24 (Debian 14.24-1.pgdg13+1)
+;     Dumped by pg_dump version: 14.24 (Debian 14.24-1.pgdg13+1)
