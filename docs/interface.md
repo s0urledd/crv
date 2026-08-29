@@ -15,10 +15,10 @@ Commands:
 
 ```text
 crv inspect <artifact> [--json]
-crv verify <backup-set|manifest> [--json]
-crv drill <backup-set|manifest> [--json]
+crv verify <backup-set|manifest> [--config <path>] [--json]
+crv drill <backup-set|manifest> [--config <path>] [--json]
 crv manifest <dir>
-crv watch <backup-set|manifest> [--json]
+crv watch <backup-set|manifest> [--config <path>] [--json]
 crv init-config [path]
 ```
 
@@ -63,3 +63,17 @@ A standalone `inspect` report uses the path supplied by the caller. The tool
 opens backup artifacts read-only and never changes bytes, mode, ownership, or
 timestamps. Watch state is separate and configurable; it is never written
 inside the backup set unless the operator explicitly chooses that path.
+
+## Manifest and config
+
+`crv manifest <dir>` writes `crv-manifest.json` atomically. Its normative schema
+is [`manifest-schema-v1.json`](manifest-schema-v1.json). Artifact paths are
+portable and relative to the manifest directory. Refresh preserves declared
+provenance, recomputes artifact size/digest references, and never derives a
+capture timestamp from mtime.
+
+`crv init-config [path]` writes a commented, runnable `crv.yaml` and refuses to
+overwrite an existing file. Pass it with `--config <path>`. A horizon has no
+evidentiary value without `sequencerHorizonSource`; an LSU usability assertion
+likewise requires its source. Watch state defaults to `.crv/state.json` and
+reports to `crv-reports`, both outside backup artifacts.

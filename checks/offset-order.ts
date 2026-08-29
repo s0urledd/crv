@@ -17,10 +17,15 @@ interface Candidate {
   migrationId?: string;
 }
 
-function candidates(artifacts: ArtifactInspection[], key: "participantLedgerEnd" | "validatorLastIngested"): Candidate[] {
+function candidates(
+  artifacts: ArtifactInspection[],
+  key: "participantLedgerEnd" | "validatorLastIngested",
+  selectedDatabase: string | null,
+): Candidate[] {
   const output: Candidate[] = [];
   for (const artifact of artifacts) {
     for (const offset of artifact.offsets) {
+      if (selectedDatabase !== null && offset.database !== null && offset.database !== selectedDatabase) continue;
       const raw = offset[key];
       if (raw === undefined || !/^\d+$/.test(raw)) continue;
       output.push({
@@ -43,9 +48,13 @@ function candidateEvidence(candidate: Candidate): Record<string, string | null> 
   };
 }
 
-export function checkOffsetOrder(artifacts: ArtifactInspection[]): CheckResult {
-  const participant = candidates(artifacts, "participantLedgerEnd");
-  const validator = candidates(artifacts, "validatorLastIngested");
+export function checkOffsetOrder(
+  artifacts: ArtifactInspection[],
+  participantDatabase: string | null = null,
+  validatorDatabase: string | null = null,
+): CheckResult {
+  const participant = candidates(artifacts, "participantLedgerEnd", participantDatabase);
+  const validator = candidates(artifacts, "validatorLastIngested", validatorDatabase);
   const hasDatabaseRole = artifacts.some(
     (artifact) => artifact.roles.includes("participant") || artifact.roles.includes("validator") || artifact.roles.includes("cluster"),
   );
@@ -60,15 +69,24 @@ export function checkOffsetOrder(artifacts: ArtifactInspection[]): CheckResult {
     };
   }
   if (participant.length !== 1 || validator.length !== 1) {
+    const requirements = [
+      "Provide one participant artifact containing participant.lapi_parameters.ledger_end and one validator artifact containing validator.store_last_ingested_offsets, or an unambiguous pg_dumpall containing both.",
+    ];
+    if (artifacts.some((artifact) => artifact.format === "cluster_dump") && (participantDatabase === null || validatorDatabase === null)) {
+      requirements.push("For a multi-database pg_dumpall, supply the captured participant and validator database names in the manifest.");
+    }
     return {
       ...definition,
       applicable: true,
       status: "UNKNOWN",
       summary: "Exactly one participant ledger end and one validator offset could not be selected.",
-      evidence: { participantCandidates: participant.length, validatorCandidates: validator.length },
-      requiredEvidence: [
-        "Provide one participant artifact containing participant.lapi_parameters.ledger_end and one validator artifact containing validator.store_last_ingested_offsets, or an unambiguous pg_dumpall containing both.",
-      ],
+      evidence: {
+        participantCandidates: participant.length,
+        validatorCandidates: validator.length,
+        selectedParticipantDatabase: participantDatabase,
+        selectedValidatorDatabase: validatorDatabase,
+      },
+      requiredEvidence: requirements,
     };
   }
 
@@ -87,6 +105,8 @@ export function checkOffsetOrder(artifacts: ArtifactInspection[]): CheckResult {
       participant: candidateEvidence(participantValue),
       validator: candidateEvidence(validatorValue),
       relation: failed ? ">" : "<=",
+      selectedParticipantDatabase: participantDatabase,
+      selectedValidatorDatabase: validatorDatabase,
     },
     requiredEvidence: [],
   };
