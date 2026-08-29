@@ -18,6 +18,7 @@ Run one experiment:
 ./experiments/04-db-selection.sh
 ./experiments/05-identities-structure.sh
 ./experiments/06-duplicate-identity.sh
+./experiments/07-version-matrix.sh
 ```
 
 Reproduce one failure catalogue entry:

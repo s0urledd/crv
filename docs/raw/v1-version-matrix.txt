@@ -1,0 +1,21 @@
+command: ./experiments/07-version-matrix.sh
+source: canton-network/splice release tags, raw.githubusercontent.com
+format: tag|migration_argument|participant_database_logic|validator_database|postgres_major|offset_schema_sha256
+0.6.0|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.1|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.2|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.3|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.4|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.5|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.6|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.7|required|participant-<migration_id>|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.8|optional|participant (default); participant-<migration_id> with -m|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.9|optional|participant (default); participant-<migration_id> with -m|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.10|optional|participant (default); participant-<migration_id> with -m|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.11|optional|participant (default); participant-<migration_id> with -m|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.12|optional|participant (default); participant-<migration_id> with -m|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.13|optional|participant (default); participant-<migration_id> with -m|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+0.6.14|optional|participant (default); participant-<migration_id> with -m|validator|14|786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e
+
+Runtime boundary: only Splice 0.6.11 was exercised end to end on LocalNet.
+Source compatibility is not a runtime-drill claim.
