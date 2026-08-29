@@ -87,3 +87,13 @@ pinned image digests, an internal Docker network, and exact-name disposable
 containers/network/volume. `PASSED` requires SQL restore, participant
 `SERVING`, selected-DB identity equality, network isolation, and verified
 cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
+
+## Watch state
+
+`crv watch` requires `--config`. It runs fast verification immediately, writes
+the v1 JSON report, and atomically updates the configured state file. Relative
+state/report paths resolve from the config directory, not the backup-set root.
+While the verdict is `MET`, the same process waits `intervalSeconds` and runs
+again. Any non-zero verdict exits with that verdict's code after persistence;
+a worsening from prior state is also named as a regression on stderr. Invalid
+state is an error, never a silent new baseline.

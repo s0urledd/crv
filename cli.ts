@@ -6,6 +6,7 @@ import { runInspect } from "./inspect.js";
 import { writeManifest } from "./manifest.js";
 import { runVerify } from "./verify.js";
 import { VERSION } from "./version.js";
+import { runWatch } from "./watch.js";
 
 const HELP = `crv ${VERSION}
 
@@ -89,6 +90,11 @@ async function main(): Promise<void> {
   }
   if (args.command === "drill") {
     process.exitCode = await runDrill(input, args.json, args.configPath);
+    return;
+  }
+  if (args.command === "watch") {
+    if (args.configPath === undefined) usageError("watch requires --config <path>");
+    process.exitCode = await runWatch(input, args.configPath, args.json);
     return;
   }
   if (args.command === "manifest") {
