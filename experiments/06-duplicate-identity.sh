@@ -10,7 +10,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-source_offset=$(docker exec postgres psql -U cnadmin -d participant-app-provider -Atc "select max(event_offset) from participant.lapi_update_meta")
+source_offset=$(docker exec postgres psql -U cnadmin -d participant-app-provider -Atc "select ledger_end from participant.lapi_parameters")
 docker exec postgres pg_dump -U cnadmin participant-app-provider >"$work/participant.sql"
 docker run -d --name crv-duplicate-postgres --network crv-bench-net --network-alias restore-postgres \
   -e POSTGRES_USER=cnadmin -e POSTGRES_PASSWORD=supersafe \
@@ -25,7 +25,7 @@ curl -fsS -X POST http://127.0.0.1:3903/api/validator/v0/wallet/tap \
   -H "content-type: application/json" \
   --data "{\"amount\":\"1\",\"command_id\":\"crv-duplicate-$(date +%s%N)\"}" >/dev/null
 for _ in $(seq 1 60); do
-  current_offset=$(docker exec postgres psql -U cnadmin -d participant-app-provider -Atc "select max(event_offset) from participant.lapi_update_meta")
+  current_offset=$(docker exec postgres psql -U cnadmin -d participant-app-provider -Atc "select ledger_end from participant.lapi_parameters")
   [[ "$current_offset" != "$source_offset" ]] && break
   sleep 2
 done

@@ -49,3 +49,15 @@ $ pg_restore -l validator-app-provider.dump | head
 ;     Offset: 8 bytes
 ;     Dumped from database version: 14.24 (Debian 14.24-1.pgdg13+1)
 ;     Dumped by pg_dump version: 14.24 (Debian 14.24-1.pgdg13+1)
+
+command: docker exec postgres pg_dumpall -U cnadmin
+bytes=99779211
+
+order of database sections
+participant-app-provider line=7002
+validator-app-provider line=39922
+
+values parsed from relevant pg_dumpall sections
+participant_ledger_end=34
+validator_last_ingested_offset=000000000000000020
+comparison=pass

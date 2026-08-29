@@ -1,6 +1,6 @@
 # Phase 1 discovery
 
-Date: 2026-08-27
+Date: 2026-08-29
 Repository: `s0urledd/crv`
 Decision: **GO only as a recovery-precondition verifier. Do not use the verdict
 word `RECOVERABLE`.**
@@ -8,8 +8,9 @@ word `RECOVERABLE`.**
 `crv` can objectively test important prerequisites and can restore a participant
 offline far enough to prove that it reaches `SERVING` with its identity intact.
 It cannot prove that the node will catch up to the live synchronizer, that an old
-physical synchronizer remains usable, or that validator-app and participant
-state are semantically consistent. Phase 2 must keep that boundary.
+physical synchronizer remains usable, or complete validator-app and participant
+semantic consistency beyond the demonstrated offset invariant. Phase 2 must
+keep that boundary.
 
 ## Evidence convention
 
@@ -105,7 +106,27 @@ That archive time still does not prove the ordering rule, because the rule is
 “validator backup completed before participant backup started.” Completion time
 is not in the archive. File mtime is not evidence of capture time.
 
-**tested on LocalNet.** Neither dump format exposed an exact Splice release.
+**tested on LocalNet.** A 96 MB `pg_dumpall` artifact was inspected because the
+reference TestNet recovery used this form. It is plain SQL, not a `pg_restore`
+archive, but it intrinsically identifies databases through `CREATE DATABASE`
+and `\connect` sections and contains both offset tables. In the observed file
+the participant app section preceded the validator app section; relevant values
+were participant ledger end 34 and validator last-ingested offset 32.
+
+**from documentation.** `pg_dumpall` invokes `pg_dump` for each database and
+does not provide one cross-database snapshot, so textual section order is not
+proof of consistency. The D2 intrinsic offset invariant remains applicable to
+the two sections.
+
+**Phase 2 scope decision.** v0.1 supports `pg_dumpall` as a first-class plain
+cluster artifact, alongside per-database plain and custom dumps. `inspect` must
+identify its database sections without using `pg_restore -l`; `verify` must
+locate the relevant participant and validator sections and apply D2. A cluster
+dump with ambiguous database selection or unknown schema degrades to `UNKNOWN`
+rather than being called unsupported or passed. Capture age still needs trusted
+provenance because the plain cluster file has no reliable completion timestamp.
+
+**tested on LocalNet.** None of these logical dump forms exposed an exact Splice release.
 Flyway/schema versions are compatibility signals, not a one-to-one product
 version. Participant identity is intrinsic to a restored participant DB. The
 identities dump also contains it directly.
@@ -123,9 +144,10 @@ artifact; restoration is the decoder.
 | PostgreSQL source/dumper version | INTRINSIC | Present in plain and custom headers. |
 | Owner role/schema names | INTRINSIC | Present in logical dump statements/catalog. |
 | Source DB name, custom archive | INTRINSIC | `pg_restore -l` exposes `dbname`. |
-| Source DB name, plain SQL/PV export | DECLARED | Not present reliably. |
+| Source DB name, per-DB plain SQL/PV export | DECLARED | Not present reliably. |
+| Source DB names, `pg_dumpall` | INTRINSIC | `CREATE DATABASE` and `\connect` sections identify them. |
 | Archive creation time, custom archive | INTRINSIC | Not authenticated and not completion time. |
-| Capture start and completion time | DECLARED | Required to prove strict cross-artifact ordering. |
+| Capture start and completion time | DECLARED | Proves chronology and supplies age input; not required by the D2 offset invariant. |
 | Exact Splice/Canton version at capture | DECLARED | Schema versions are not exact releases. |
 | Current running Splice/Canton version | DERIVED | Read image tag/version endpoint/workload. |
 | Effective participant DB selected at capture | DECLARED | Record the resolved DB, not only `MIGRATION_ID`. |
@@ -138,10 +160,10 @@ artifact; restoration is the decoder.
 | Current participant pruning retention | DERIVED | Read effective compose/Helm/app config. |
 | Effective network sequencer retention | DECLARED | No public Scan response field exposes it. Use a network-operator source; do not infer it from `~30 days`. |
 
-This result makes the manifest mandatory provenance. Generating a manifest
-after the fact may hash files and inspect intrinsic fields, but it must not
-invent capture start/completion times from mtime. Missing declared values yield
-`UNKNOWN`.
+The manifest is mandatory only for checks whose inputs are declared. Generating
+one after the fact may hash files and inspect intrinsic fields, but it must not
+invent capture start/completion times from mtime. Missing declared values make
+the dependent checks `UNKNOWN`; intrinsic checks such as D2 still run.
 
 **reported by operator.** The brief says a MainNet compose validator uses
 `MIGRATION_ID=4`, `participant-4`, Keycloak, identities export, and six-hourly
@@ -155,33 +177,56 @@ report.
 ## D2. Ordering and consistency
 
 **from documentation.** The validator backup must complete strictly before the
-participant backup begins. This is an explicit requirement in the
-[Splice backup procedure](https://docs.dev.sync.global/validator_operator/validator_backups.html),
-not a PostgreSQL constraint.
+participant backup begins. The rationale is that validator state may refer to
+Ledger API offsets absent from an older participant backup.
 
-**tested on LocalNet.** At t1, both participant and validator ingestion were at
-offset 59. The participant and whole cluster were dumped. A real validator
-wallet `tap` then advanced both to 62. The validator app was dumped at t2. The
-injected contract ID occurred four times in the t2 validator dump and zero
-times in the t1 participant dump. The reversed pair was therefore semantically
-different by construction.
+**from documentation.** [Splice persists each validator store offset](https://github.com/canton-network/splice/blob/398919a5b13479877fd61587003ba7a4ba00091b/apps/common/src/main/scala/org/lfdecentralizedtrust/splice/store/db/DbMultiDomainAcsStore.scala#L1068-L1082) with
+`LegacyOffset.Api.fromLong`, and reads it with
+`LegacyOffset.Api.assertFromStringToLong`. The value is therefore the same
+Ledger API offset space represented by the participant
+`lapi_parameters.ledger_end`; it is not an unrelated application counter.
 
-**tested on LocalNet.** PostgreSQL restored that reversed pair successfully.
-The restored participant remained at 59 while the validator DB recorded 62.
-The full restored Canton + Splice stack was started on an internal network;
-both services became healthy, the stale reference remained, and no generic
-offset/`FAILED_PRECONDITION` error was emitted. [Raw output](raw/d2-ordering.txt).
+**tested on LocalNet.** The original experiment queried
+`max(event_offset)` from `lapi_update_meta`. That is not the participant ledger
+end and can lag it, so the experiment was corrected and rerun. In the final
+run the participant was dumped at ledger end 65. A real validator wallet `tap`
+then advanced the live participant to 68 and the validator store to hexadecimal
+`0x42` (66). The validator was dumped at t2.
 
-Conclusion: database restore success and green startup are not proof of pair
-consistency. The observable symptom in this controlled experiment was the
-known injected contract being present only in the validator artifact. There is
-no demonstrated generic query that discovers an arbitrary reversed pair after
-the fact. `crv` must enforce documented capture provenance; it must not claim
-to infer semantic consistency by starting the apps.
+**tested on LocalNet.** Both values were extracted directly from the plain SQL
+artifacts, before restore: `65` from `participant.lapi_parameters.ledger_end`
+and `000000000000000042` from the greatest
+`validator.store_last_ingested_offsets.last_ingested_offset` in the latest
+migration represented by that table. The artifact-only comparison reported
+`FAIL` because 66 is greater than 65. The known post-t1 contract also appeared
+twice in the validator artifact and zero times in the participant artifact.
+[Raw output](raw/d2-ordering.txt).
 
-Classification at Phase 1 close: **Recovery prerequisite**. A trusted manifest
-can measure it. Missing completion/start times are `UNKNOWN`, not failure and
-not pass. The isolated runtime sub-check for “generic semantic consistency” is
+The intrinsic invariant is:
+
+```text
+max validator last-ingested offset for the captured migration
+    <= participant ledger end
+```
+
+A greater validator offset proves that validator state can reference ledger
+updates absent from the participant artifact. Equality passes: a physically
+reversed pair with no relevant ledger progress has no missing offset and does
+not need to be rejected by this invariant. A lower validator offset is normal.
+A pass proves only the absence of this specific contradiction, not complete
+semantic consistency. Missing tables, empty offsets, or an unrecognised schema
+produce `UNKNOWN`, never a pass.
+
+**tested on LocalNet.** PostgreSQL still restored the failing pair. The restored
+participant remained at 65 while validator state recorded 66. Canton and
+Splice both became healthy and no generic offset or `FAILED_PRECONDITION` error
+was emitted. Green startup is therefore not a detector.
+
+Classification at Phase 1 close: the artifact offset comparison is a
+**Proven invariant** with **INTRINSIC** evidence. It ships without requiring a
+manifest. Declared capture times remain useful corroborating provenance and are
+needed by age checks, but they are not required to detect this dangerous
+ordering case. Generic semantic consistency from offline startup remains
 **Unverifiable** and does not ship.
 
 ## D3. Age and pruning
@@ -199,12 +244,24 @@ auditability must be spaced closer than the participant pruning `retention`.
 2. participant pruning retention limits spacing if an operator wants continuous
    historical coverage beyond the live DB.
 
-The public Scan `GET /v0/dso-sequencers` schema exposes physical synchronizer
-IDs, sequencer URLs, availability time, migration ID or synchronizer serial. It
-does not expose `retentionPeriod`. The `~30 days` documentation is authoritative
-for the documented policy but is not a live machine-readable network value.
-Do not hardcode it. Require a manifest/network-policy input with source and
-observed time; absent that, report `UNKNOWN`.
+A second search covered the complete [public Scan OpenAPI](https://github.com/canton-network/splice/blob/398919a5b13479877fd61587003ba7a4ba00091b/apps/scan/src/main/openapi/scan.yaml), not only
+`GET /v0/dso-sequencers`. No public response exposes sequencer
+`retentionPeriod`, the actual pruning lower bound, or sequencer pruning status.
+The closest field is the internal
+`POST /v0/backfilling/migration-info` record-time range. It describes updates
+held by a Scan and is not a sequencer catch-up horizon.
+
+[SV source confirms the boundary](https://github.com/canton-network/splice/blob/398919a5b13479877fd61587003ba7a4ba00091b/apps/sv/src/main/scala/org/lfdecentralizedtrust/splice/sv/automation/singlesv/SequencerPruningTrigger.scala#L94-L144): `SequencerPruningTrigger` receives
+`retentionPeriod` from SV configuration and reads actual status through the
+private sequencer admin connection `getSequencerPruningStatus()`. It uses Scan
+migration history only as an approximation of the latest ingested update time.
+An ordinary validator therefore cannot derive the live network horizon from a
+public Scan API. The documented 30-day setting is a recommended network policy,
+not a live measurement. `crv` may accept it only as an explicitly selected,
+versioned documentation-policy input; it must not silently hardcode it. Without
+a trusted policy or network-operator input, this check is `UNKNOWN`.
+
+[Raw source search](raw/d3-retention-source-search.txt).
 
 Participant pruning schedule is rendered by the validator Helm chart as
 `participant-pruning-schedule { cron, max-duration, retention }`; it is derived
@@ -307,18 +364,18 @@ consistency. Therefore `RECOVERABLE` overstates the evidence. Phase 2 proceeds
 only under the fallback thesis: recovery-precondition verification plus
 optional offline structural restore.
 
-Final aggregate vocabulary proposed for v0.1:
+Phase 2 must report two dimensions instead of hiding structural evidence inside
+one verdict.
 
-| Verdict | Meaning |
-| --- | --- |
-| `PRECONDITIONS MET` | Every applicable proven invariant and recovery prerequisite with available evidence passed. This is not a promise that recovery will succeed. |
-| `AT RISK` | Required checks passed, but one or more heuristics failed. |
-| `PRECONDITIONS FAILED` | A proven invariant or measurable recovery prerequisite failed. |
-| `INDETERMINATE` | A required condition could not be established from available evidence. |
+| Dimension | Status | Meaning |
+| --- | --- | --- |
+| Recovery preconditions | `MET`, `AT_RISK`, `FAILED`, `INDETERMINATE` | Aggregate of proven invariants, recovery prerequisites, heuristics, and unavailable evidence. It is not a promise that recovery will succeed. |
+| Offline structural restore | `NOT_RUN`, `PASSED`, `FAILED` | Separately states whether SQL restored, participant reached `SERVING`, identity matched, and network isolation held. |
 
-Aggregation precedence is `PRECONDITIONS FAILED`, `INDETERMINATE`, `AT RISK`,
-then `PRECONDITIONS MET`. Individual checks use `PASS`, `FAIL`, `WARN`, or
-`UNKNOWN`.
+Precondition precedence is `FAILED`, `INDETERMINATE`, `AT_RISK`, then `MET`.
+Individual checks use `PASS`, `FAIL`, `WARN`, or `UNKNOWN`. A structural failure
+may also fail the applicable artifact path, but a structural pass never upgrades
+preconditions and is always presented separately.
 
 ## D6. Identities dump validation
 
@@ -370,7 +427,7 @@ verification into recovery orchestration. It does not belong in `crv` v0.1.
 
 | Fixture | Genuine result | Expected v0.1 detection |
 | --- | --- | --- |
-| Reversed order | Known post-t1 validator contract absent from t1 participant; restore and stack startup still green. | Manifest ordering prerequisite fails; without provenance, `UNKNOWN`. |
+| Reversed order | Validator artifact offset 66 exceeds participant ledger end 65; restore and stack startup still green. | Intrinsic offset invariant fails without a manifest. |
 | Wrong migration-shaped DB selection | Participant health green, selected DB has no node identity. | Selected identity invariant fails. |
 | Truncated plain dump | `psql` exits non-zero with `missing data for column` during `COPY`. | Structural restore fails; digest also fails if reference exists. |
 | Missing identities | Required recovery path absent. | Set completeness fails only when no valid DB path exists. |
@@ -386,7 +443,8 @@ dumps or private fixture keys are committed.
 
 | Compose/logical dump check | Kubernetes/Helm equivalent | Gap |
 | --- | --- | --- |
-| Validator then participant `pg_dump` ordering | Ordered managed-DB backups or PV/CSI snapshots; record provider start/completion/resource IDs in manifest. | Simultaneous or crash-consistent snapshots do not by themselves prove the documented strict order. |
+| Validator offset does not exceed participant ledger end | Extract tables from logical dumps; for PV or CSI snapshots, clone and query restored databases. | Opaque snapshots require isolated restore before the intrinsic comparison can run. |
+| Validator then participant `pg_dump` chronology | Ordered managed-DB backups or PV/CSI snapshots; record provider start/completion/resource IDs in manifest. | Simultaneous or crash-consistent snapshots do not by themselves prove the documented strict order. |
 | Dump source DB | `persistence.databaseName`, managed DB instance metadata, or PVC annotation. | Opaque snapshot bytes do not expose a logical DB name. |
 | Participant DB selection | Participant chart `persistence.databaseName` plus identity read after isolated restore. | Chart value alone does not prove snapshot contents. |
 | Capture time | `VolumeSnapshot.metadata.creationTimestamp` or provider completion time, recorded in manifest. | Kubernetes object time may be lost when only exported storage remains. |
@@ -410,21 +468,29 @@ the checks marked “ship” are eligible for v0.1.
 | Required artifact path exists (DB pair or identities fallback) | Proven invariant | Ship | Missing all valid paths can fail preconditions. |
 | Reference digest/size matches current artifact | Proven invariant | Ship when manifest has reference | Mismatch can fail; no reference is `UNKNOWN`. |
 | Selected participant DB identity equals expected participant identity | Proven invariant | Ship | Mismatch/absence can fail. |
-| Validator capture completed before participant capture began | Recovery prerequisite | Ship | Trusted reversal can fail; missing provenance is `UNKNOWN`. |
+| Validator last-ingested offset does not exceed participant ledger end | Proven invariant | Ship | Intrinsic violation can fail; absent or unknown schema is `UNKNOWN`. |
 | Latest participant age is below sourced sequencer horizon | Recovery prerequisite | Ship | Measured expiry can fail; unsourced horizon is `UNKNOWN`. |
 | Historical backup spacing is below participant retention | Recovery prerequisite | Ship only for declared historical-continuity claim | Failure affects that claim, not immediate latest-set recovery. |
 | Backup crossed an LSU and old physical synchronizer remains available | Recovery prerequisite | Ship | Known unavailable old synchronizer can fail; published-but-unproven availability may be `UNKNOWN`. |
-| Plain/custom dump parses and SQL restore completes | Structural validation | Ship | Failure can fail artifact path; success never creates a passing verdict alone. |
+| Plain/custom/cluster dump parses and SQL restore completes | Structural validation | Ship | Failure can fail artifact path; success never creates a passing verdict alone. |
 | Restored participant reaches `SERVING` with expected identity offline | Structural validation | Ship behind isolated mode | Failure can fail artifact path; success does not prove catch-up. |
 | Identities JSON fields/base64 are structurally valid | Structural validation | Ship | Failure invalidates identities path; success alone is insufficient. |
 | Backup frequency recommendation (for example four hours) | Heuristic | Ship only if operator declares policy | Failure is at most `AT RISK`. |
-| Generic validator/participant semantic consistency from offline startup | Unverifiable | Do not ship | D2 showed green startup on a reversed pair. |
+| Generic validator/participant semantic consistency beyond the offset invariant | Unverifiable | Do not ship | D2 showed green startup on an offset-inconsistent pair. |
 | Exact Splice/Canton compatibility inferred from dump schema | Unverifiable | Do not ship | No exact artifact version or proven compatibility matrix. |
 | Identities party hint equality from identities JSON alone | Unverifiable | Do not ship as a pass/fail check | Party hint is absent; report `UNKNOWN` unless declared/live evidence supplied. |
 | Proposed new participant ID has never been used | Unverifiable | Do not ship | Requires external history and belongs to re-onboarding. |
 | Automatic recovery of multi-hosted/external parties and post-backup users | Unverifiable | Do not ship | Report documented limitations. |
 
-## One operator confirmation still needed
+## Open evidence and documentation status
+
+- D3 is closed as a **from documentation** finding: the full public Scan API
+  has no live sequencer-retention field. The check is `UNKNOWN` without a
+  trusted policy input.
+- D8 is closed as a **from documentation** parity map. Provider-specific
+  Kubernetes snapshot cloning and isolated restore remain **unknown, needs
+  testing**; no cluster behavior was claimed.
+- One operator confirmation remains open:
 
 **unknown, needs testing.** To confirm that the production compose DB list and
 owner match the documented/LocalNet shape, run exactly this read-only command

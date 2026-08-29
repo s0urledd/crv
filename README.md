@@ -9,16 +9,18 @@ Read [the discovery report](docs/discovery.md). Reproduce its LocalNet evidence
 with the commands in [experiments](experiments/README.md). Phase 2 is gated on
 review of that evidence.
 
-## Manifest requirement
+## Evidence and manifests
 
-Plain `pg_dump` output does not contain the source database name or a capture
-timestamp. Even a custom archive's creation time does not prove that the
-validator dump completed before the participant dump began. A `crv` manifest
-is therefore the provenance layer, not an optional index: it records capture
-start and completion times, the selected database, deployment version, and
-synchronizer identity beside artifacts created by the operator's existing
-backup job. It never changes those artifacts. A missing declared value must
-produce `UNKNOWN`; it must never silently pass.
+`crv` first uses evidence intrinsic to artifacts. A validator offset ahead of
+the participant ledger end proves that the pair is internally inconsistent;
+detecting that violation does not require a manifest or a backup process
+created by `crv`.
+
+A manifest supplies provenance that artifacts do not contain reliably: capture
+start and completion times, selected database, deployment version, and
+synchronizer identity. It sits beside artifacts created by the operator's
+existing backup job and never changes them. A missing declared value makes only
+the dependent check `UNKNOWN`; it must never silently pass.
 
 ## Non-goals
 

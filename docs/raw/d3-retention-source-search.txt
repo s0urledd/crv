@@ -1,0 +1,25 @@
+Source: canton-network/splice@398919a5b13479877fd61587003ba7a4ba00091b
+
+command: rg -n -i "retention|prun|earliest|record_time_range" apps/scan/src/main/openapi/scan.yaml
+325: earliest-first ordering text
+1659: /v0/internal/reward-accounting-process/rounds/earliest-available
+3633: required record_time_range
+3641: record_time_range schema
+4232: reward-accounting earliest-round response
+
+result: no public Scan OpenAPI field named retentionPeriod, sequencer pruning
+status, safe pruning timestamp, or sequencer pruning lower bound.
+
+internal endpoint inspected:
+1338: /v0/backfilling/migration-info
+schema: record_time_range contains oldest and newest Scan update record times
+result: Scan history coverage, not sequencer catch-up retention.
+
+command: rg -n "getSequencerPruningStatus|retentionPeriod" apps/sv apps/common
+SequencerPruningTrigger.scala:52 retentionPeriod constructor input
+SequencerPruningTrigger.scala:101 getSequencerPruningStatus()
+SequencerPruningTrigger.scala:142 pruningTimestamp = status.now.minus(retentionPeriod)
+SequencerAdminConnection.scala:511 getSequencerPruningStatus()
+
+result: effective retention comes from SV configuration; actual pruning status
+comes from the private sequencer admin API, not public Scan.
