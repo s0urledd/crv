@@ -1,0 +1,16 @@
+$ start restored 0.6.11 validator databases with MIGRATION_ID=1
+container_health=healthy
+Resolved domain migration id 0 from the local store offsets
+
+The restored application ignored the conflicting startup value and recovered
+the persisted migration ID. No mismatch failure was emitted.
+
+$ restore participant dump into participant-0; configure participant to use empty participant-1
+participant_process_health=healthy
+restored_db_identity_rows=1
+selected_wrong_db_identity_rows=0
+
+$ participant.id on the process using participant-1
+Node is not initialized and therefore does not have an Id assigned yet.
+
+Process health alone did not reveal that the restored database was not selected.

@@ -1,0 +1,34 @@
+reversed capture order
+----------------------
+See d2-ordering.txt. The reversed pair restored, both processes were healthy,
+and the injected validator-app reference was absent from the participant dump.
+
+wrong migration-shaped database selection
+-----------------------------------------
+See d4-migration-and-db-selection.txt. The participant process was healthy but
+the selected database contained no participant identity.
+
+truncated dump
+--------------
+$ truncate -s 1048576 participant-truncated.sql
+$ psql -v ON_ERROR_STOP=1 ... < participant-truncated.sql
+COPY 0
+COPY 9
+ERROR:  missing data for column "name"
+CONTEXT:  COPY par_daml_packages, line 2: "<redacted package data>"
+restore_exit=3
+
+missing identities
+------------------
+IDENTITIES_FILE_MISSING: required recovery path is absent: identities.json
+result=failed_precondition
+
+stale backup
+------------
+simulation=true
+age_seconds=2678400
+declared_horizon_seconds=2592000
+result=failed_precondition
+
+The stale case tests arithmetic and reporting only. It is not evidence that a
+single-host LocalNet reproduces network sequencer pruning.

@@ -1,0 +1,16 @@
+$ curl .../api/validator/v0/admin/participant/identities
+http_status=200
+bytes=2177
+
+$ jq structural inspection (key material omitted)
+top_level_keys=authorizedStoreSnapshot,id,keys,version
+id_prefix=PAR
+key_count=3
+key_fields=keyPair,name
+authorized_store_snapshot_decoded_bytes=923
+concatenated_keypair_decoded_bytes=516
+version=0.6.11
+party_hint_present=false
+
+No keyPair, snapshot, bearer token, namespace, party ID, hostname, or IP value
+is stored in this repository.

@@ -1,0 +1,59 @@
+$ restore participant dump into disposable postgres on an internal Docker network
+restore_exit=0
+participant_db_size=31 MB
+
+$ start canton-participant:0.6.11 with only disposable postgres present
+start=2026-08-27T12:11:19.000Z
+serving=2026-08-27T12:11:27.630Z
+elapsed=8.63 seconds
+health=healthy
+network_internal=true
+connected_synchronizers=0
+participant_id=<local-fixture-participant-id>
+identities_dump_id=<same-local-fixture-participant-id>
+identity_match=true
+exit_on_fatal_failures_override_used=false
+
+$ ./experiments/03-isolated-restore.sh (clean rerun 2026-08-28)
+end_to_end_elapsed=23 seconds
+participant_db_bytes=32402779
+network_internal=true
+participant_health=healthy
+participant_identity_matches_identities_dump=true
+
+$ docker image inspect
+participant_image_bytes=597350196
+postgres_image_bytes=157095150
+
+$ docker stats --no-stream
+participant_memory=859.6MiB
+postgres_memory=328.7MiB
+
+The image sizes are unshared layer totals, not incremental disk usage.
+
+$ start a second copy of the restored participant against the source LocalNet synchronizer
+Connected to synchronizer: Synchronizer 'global'
+Starting subscription at the timestamp 2026-08-27T12:10:20.208227Z
+Permanently closing sequencer subscription due to error:
+HandlerError(EventValidationError(PreviousTimestampMismatch(
+  received previous event timestamp = Some(2026-08-27T11:57:08.806452Z),
+  expected previous event timestamp = Some(2026-08-27T12:10:20.208227Z)))
+SYNC_SERVICE_SYNCHRONIZER_DISCONNECTED: Synchronizer 'global' fatally disconnected
+FATAL: Fatal error occurred, crashing the node to recover from invalid state
+container_exit=117
+
+This duplicate-identity experiment used only a disposable LocalNet. It was
+never attempted against a public synchronizer.
+
+
+$ ./experiments/06-duplicate-identity.sh (two clean reruns 2026-08-28)
+Connected to synchronizer: Synchronizer global
+Starting subscription at the backed-up timestamp
+observation_window=180 seconds
+container_running=true
+container_exit=0
+
+The exit-117 symptom above is observed evidence, not an invariant. A duplicate
+with only a small event gap was not rejected during either clean observation
+window. This strengthens the requirement for isolation: collision detection
+cannot be relied on as a safety mechanism.
