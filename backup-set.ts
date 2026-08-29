@@ -6,6 +6,8 @@ import { MANIFEST_FILENAME, manifestRoot, readManifest, type CaptureManifest } f
 import type { ArtifactInspection, BackupSetLayout } from "./types.js";
 
 export interface BackupSetInspection {
+  root: string;
+  artifactLocations: Map<string, string>;
   artifacts: ArtifactInspection[];
   layout: BackupSetLayout;
   manifest: CaptureManifest | null;
@@ -58,6 +60,7 @@ async function inspectFromManifest(path: string): Promise<BackupSetInspection> {
   const manifest = await readManifest(path);
   const root = manifestRoot(path);
   const artifacts: ArtifactInspection[] = [];
+  const artifactLocations = new Map<string, string>();
   const missingArtifactPaths: string[] = [];
   for (const reference of manifest.artifacts) {
     const file = await containedPath(root, reference.path);
@@ -72,8 +75,11 @@ async function inspectFromManifest(path: string): Promise<BackupSetInspection> {
       continue;
     }
     artifacts.push(await inspectArtifact(file, { displayPath: reference.path, computeSha256: true }));
+    artifactLocations.set(reference.path, file);
   }
   return {
+    root,
+    artifactLocations,
     artifacts,
     layout: classify(artifacts, false),
     manifest,
@@ -88,12 +94,18 @@ export async function inspectBackupSet(input: string): Promise<BackupSetInspecti
 
   const selected = await selectInputFiles(input);
   const artifacts: ArtifactInspection[] = [];
+  const artifactLocations = new Map<string, string>();
   for (const file of selected.files) {
     const displayPath = selected.single ? input : relative(selected.root, file);
     const artifact = await inspectArtifact(file, { displayPath });
-    if (artifact.format !== "unknown") artifacts.push(artifact);
+    if (artifact.format !== "unknown") {
+      artifacts.push(artifact);
+      artifactLocations.set(displayPath, file);
+    }
   }
   return {
+    root: selected.single ? resolve(input, "..") : selected.root,
+    artifactLocations,
     artifacts,
     layout: classify(artifacts, selected.single),
     manifest: null,

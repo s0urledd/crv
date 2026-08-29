@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { writeInitialConfig } from "./config.js";
 import { UnsupportedInputError } from "./errors.js";
+import { runDrill } from "./isolated/drill.js";
 import { runInspect } from "./inspect.js";
 import { writeManifest } from "./manifest.js";
 import { runVerify } from "./verify.js";
@@ -84,6 +85,10 @@ async function main(): Promise<void> {
   }
   if (args.command === "verify") {
     process.exitCode = await runVerify(input, args.json, args.configPath);
+    return;
+  }
+  if (args.command === "drill") {
+    process.exitCode = await runDrill(input, args.json, args.configPath);
     return;
   }
   if (args.command === "manifest") {

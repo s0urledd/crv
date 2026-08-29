@@ -1,4 +1,4 @@
-import { inspectBackupSet } from "./backup-set.js";
+import { inspectBackupSet, type BackupSetInspection } from "./backup-set.js";
 import { checkBackupAge } from "./checks/backup-age.js";
 import { checkIdentitiesStructure } from "./checks/identities-structure.js";
 import { checkLsuPath } from "./checks/lsu.js";
@@ -12,11 +12,12 @@ import { formatReport } from "./report/human.js";
 import { REPORT_SCHEMA_VERSION, type VerificationReport } from "./types.js";
 import { VERSION } from "./version.js";
 
-export async function verify(input: string, configPath?: string, now = new Date()): Promise<VerificationReport> {
-  const [set, config] = await Promise.all([
-    inspectBackupSet(input),
-    configPath === undefined ? Promise.resolve<CrvConfig | null>(null) : loadConfig(configPath),
-  ]);
+export function buildVerificationReport(
+  input: string,
+  set: BackupSetInspection,
+  config: CrvConfig | null,
+  now = new Date(),
+): VerificationReport {
   const artifacts = set.artifacts;
   const checks = [
     checkRequiredPath(artifacts),
@@ -48,6 +49,14 @@ export async function verify(input: string, configPath?: string, now = new Date(
     artifacts,
     checks,
   };
+}
+
+export async function verify(input: string, configPath?: string, now = new Date()): Promise<VerificationReport> {
+  const [set, config] = await Promise.all([
+    inspectBackupSet(input),
+    configPath === undefined ? Promise.resolve<CrvConfig | null>(null) : loadConfig(configPath),
+  ]);
+  return buildVerificationReport(input, set, config, now);
 }
 
 export async function runVerify(input: string, json: boolean, configPath?: string): Promise<number> {

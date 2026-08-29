@@ -77,3 +77,13 @@ overwrite an existing file. Pass it with `--config <path>`. A horizon has no
 evidentiary value without `sequencerHorizonSource`; an LSU usability assertion
 likewise requires its source. Watch state defaults to `.crv/state.json` and
 reports to `crv-reports`, both outside backup artifacts.
+
+## Drill runtime boundary
+
+v0.1 fast inspection supports the source-reviewed Splice 0.6.0–0.6.14 D2
+schema family. The containerized runtime drill is narrower: it refuses to run
+without exact Splice 0.6.11 evidence and PostgreSQL 14 compatibility. It uses
+pinned image digests, an internal Docker network, and exact-name disposable
+containers/network/volume. `PASSED` requires SQL restore, participant
+`SERVING`, selected-DB identity equality, network isolation, and verified
+cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
