@@ -30,3 +30,16 @@ sed -n '1,16p' "$CRV_ARTIFACTS/validator-app-provider.sql"
 
 echo '== custom archive header =='
 docker run --rm -i postgres:14 pg_restore -l <"$CRV_ARTIFACTS/validator-app-provider.dump" | sed -n '1,14p'
+
+echo "== whole-cluster dump =="
+/usr/bin/time -f "cluster elapsed=%e maxrss_kb=%M" \
+  docker exec postgres pg_dumpall -U cnadmin \
+  >"$CRV_ARTIFACTS/cluster.sql"
+wc -c "$CRV_ARTIFACTS/cluster.sql"
+rg -n -F "\\connect" "$CRV_ARTIFACTS/cluster.sql" | rg "participant-app-provider|validator-app-provider"
+echo "participant lapi_parameters row:"
+sed -n "/^COPY participant\.lapi_parameters /{n;p;q;}" \
+  "$CRV_ARTIFACTS/cluster.sql"
+echo "validator store_last_ingested_offsets rows:"
+sed -n "/^COPY validator\.store_last_ingested_offsets /{n;p;n;p;n;p;q;}" \
+  "$CRV_ARTIFACTS/cluster.sql"

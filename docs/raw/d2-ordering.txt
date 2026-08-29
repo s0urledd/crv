@@ -1,46 +1,11 @@
-The injected contract ID and all Canton identities are redacted. Counts are
-preserved.
-
-$ query offsets before participant capture (t1)
-participant_max_event_offset=59
-validator_last_ingested_offset=00000000000000003b
-
-$ pg_dumpall (t1)
-bytes=146906506
-elapsed=5.24
-
-$ pg_dump participant-app-provider (t1)
-bytes=45617771
-elapsed=0.76
-
-$ POST /api/validator/v0/wallet/tap
-contract_id=<local-fixture-contract-id>
-
-$ query offsets after the operation (t2)
-participant_max_event_offset=62
-validator_last_ingested_offset=00000000000000003e
-
-$ pg_dump validator-app-provider (t2)
-bytes=176643
-elapsed=0.38
-
-$ count injected ID in dumps
-validator_t2=4
-participant_t1=0
-
-$ restore base t1; overwrite validator app with t2
-base_restore_elapsed=18.09
-validator_overwrite_elapsed=1.04
-participant_max_event_offset=59
-validator_last_ingested_offset=00000000000000003e
-
-$ start restored Canton + Splice stack on internal network
-network_internal=true
-canton_health=healthy
-splice_health=healthy
-validator_reference_count=4
-participant_reference_count=0
-offset_or_failed_precondition_error_count=0
-
-The pair is semantically reversed by construction. PostgreSQL restored it and
-the full application stack stayed healthy without a generic offset error.
+t1 participant_offset=65
+t1 validator_offset=00000000000000003f
+t2 participant_offset=68
+t2 validator_offset=000000000000000042
+artifact_offset_invariant=fail participant_ledger_end=65 validator_last_ingested=000000000000000042
+injected_reference validator_t2=2 participant_t1=0
+restore_sql=success restored_participant_offset=65 restored_validator_offset=000000000000000042
+restored_stack_canton_health=healthy
+restored_stack_splice_health=healthy
+restored_runtime_reported_offset_error=0
+conclusion=validator app contains a post-t1 contract reference absent from participant t1; SQL restore and green processes do not establish semantic consistency
