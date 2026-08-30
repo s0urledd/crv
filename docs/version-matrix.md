@@ -16,9 +16,13 @@ identical across all 0.6.0–0.6.14 release tags. Its latest-migration offset is
 therefore one supported D2 adapter family, not fifteen version branches.
 
 The participant-side `lapi_parameters.ledger_end` query and isolated participant
-startup were exercised end to end on Splice 0.6.11. Other 0.6.x releases are
+startup were exercised end to end on Splice 0.6.11. Other source-reviewed 0.6.0-0.6.14 releases are
 source-compatible for fast artifact inspection but are not yet claimed as
 runtime-drill tested. Every release must state this distinction.
+
+The CLI makes this an evidence limitation, not an artifact failure. For example,
+`crv drill` reports Splice 0.6.9 as not yet validated and directs the operator
+to `crv verify`, whose D2 adapter is source-reviewed for 0.6.0-0.6.14.
 
 ## Version evidence
 

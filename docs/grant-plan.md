@@ -13,6 +13,12 @@ participant pair restores successfully, Canton and Splice become healthy, and
 no runtime error identifies the problem. The two artifact offsets identify it
 before restore and without a `crv` manifest.
 
+The second opening proof explains the two verification tiers: a manifest created
+from an already-truncated dump has a matching checksum, yet PostgreSQL rejects
+the dump during `COPY`. A checksum proves equality to its reference, not that
+the referenced backup can restore; the isolated drill supplies that structural
+evidence.
+
 ## Fit
 
 Target [Canton Development Fund roadmap item 23](https://github.com/canton-foundation/canton-dev-fund/blob/main/2026-2028-strategic-roadmap.md#23-validator-and-shared-infrastructure-security-and-resilience), **Validator and Shared Infrastructure Security and Resilience**. It explicitly requests reusable
@@ -88,6 +94,7 @@ tranche; the amount must follow remaining work, not copy another grant.
 The grant PR should link to:
 
 - the D2 one-command reversed-pair demonstration;
+- the truncated artifact whose matching manifest digest still precedes a failed restore;
 - the Phase 1 evidence/classification table;
 - one good and every documented bad JSON report;
 - isolated-restore timing, disk, identity, and no-network evidence;
