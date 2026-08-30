@@ -198,10 +198,19 @@ export async function drill(input: string, configPath?: string, now = new Date()
     configPath === undefined ? Promise.resolve<CrvConfig | null>(null) : loadConfig(configPath),
   ]);
   exactDrillVersion(set);
-  const unsupportedPostgres = set.artifacts
-    .map((artifact) => artifact.postgresSourceVersion)
-    .filter((version): version is string => version !== null && !version.startsWith("14"));
-  if (unsupportedPostgres.length > 0) throw new UnsupportedInputError(`isolated runtime drill supports PostgreSQL 14 artifacts; received ${unsupportedPostgres[0]}`);
+  const databaseArtifacts = set.artifacts.filter((artifact) => {
+    const roles = artifactRoles(set, artifact);
+    return ["plain_dump", "custom_dump", "cluster_dump"].includes(artifact.format) &&
+      roles.some((role) => role === "participant" || role === "validator" || role === "cluster");
+  });
+  const unknownPostgres = databaseArtifacts.find((artifact) => artifact.postgresSourceVersion === null);
+  if (unknownPostgres) {
+    throw new UnsupportedInputError(`crv drill requires PostgreSQL source version evidence for ${unknownPostgres.path}`);
+  }
+  const unsupportedPostgres = databaseArtifacts
+    .map((artifact) => artifact.postgresSourceVersion as string)
+    .find((version) => !/^14(?:\.|\s|$)/.test(version));
+  if (unsupportedPostgres) throw new UnsupportedInputError(`isolated runtime drill supports PostgreSQL 14 artifacts; received ${unsupportedPostgres}`);
 
   const report = buildVerificationReport(input, set, config, now);
   const result = await executeDrill(set, config, report);

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { drill } from "../isolated/drill.js";
+import { writeManifest } from "../manifest.js";
 import { formatReport } from "../report/human.js";
 import { verify } from "../verify.js";
 
@@ -9,6 +12,24 @@ const fixture = (name: string) => resolve(process.cwd(), "test", "fixtures", nam
 
 test("refuses a runtime drill before Docker when exact Splice version is absent", async () => {
   await assert.rejects(() => drill(fixture("good")), /requires one exact Splice version/);
+});
+
+test("refuses a runtime drill before Docker when PostgreSQL source version is unknown", async () => {
+  const root = await mkdtemp(join(tmpdir(), "crv-drill-version-"));
+  try {
+    for (const name of ["participant.sql", "validator.sql"]) {
+      const source = await readFile(join(fixture("good"), name), "utf8");
+      await writeFile(join(root, name), source.replace(/^-- Dumped from database version .+\n/m, ""));
+    }
+    const manifestPath = await writeManifest(root);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    const declared = manifest.declared as Record<string, unknown>;
+    declared.spliceVersion = "0.6.11";
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assert.rejects(() => drill(root), /requires PostgreSQL source version evidence/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("human report exposes structural failure and cleanup evidence", async () => {
