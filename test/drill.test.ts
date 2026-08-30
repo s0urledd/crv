@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -12,6 +12,22 @@ const fixture = (name: string) => resolve(process.cwd(), "test", "fixtures", nam
 
 test("refuses a runtime drill before Docker when exact Splice version is absent", async () => {
   await assert.rejects(() => drill(fixture("good")), /requires one exact Splice version/);
+});
+
+test("explains that Splice 0.6.9 drill is unvalidated while verify remains available", async () => {
+  const root = await mkdtemp(join(tmpdir(), "crv-drill-splice-version-"));
+  const set = join(root, "set");
+  try {
+    await cp(fixture("good"), set, { recursive: true });
+    const manifestPath = await writeManifest(set);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    const declared = manifest.declared as Record<string, unknown>;
+    declared.spliceVersion = "0.6.9";
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+    await assert.rejects(() => drill(set), /Splice 0\.6\.9 is not yet validated for crv drill\. crv verify still runs fast checks/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("refuses a runtime drill before Docker when PostgreSQL source version is unknown", async () => {

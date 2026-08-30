@@ -26,7 +26,7 @@ function exactDrillVersion(set: BackupSetInspection): string {
   if (values.size !== 1) throw new UnsupportedInputError("crv drill requires one exact Splice version from manifest or identities export");
   const version = [...values][0];
   if (version !== DRILL_SPLICE_VERSION) {
-    throw new UnsupportedInputError(`isolated runtime drill is tested only for Splice ${DRILL_SPLICE_VERSION}; received ${version ?? "unknown"}`);
+    throw new UnsupportedInputError(`Splice ${version ?? "unknown"} is not yet validated for crv drill. crv verify still runs fast checks; D2 coverage is source-reviewed for Splice 0.6.0-0.6.14.`);
   }
   return version;
 }
