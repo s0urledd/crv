@@ -1,8 +1,8 @@
 # v0.1 command and report contract
 
-The v0.1 machine interface is JSON report schema `1.0`. Consumers must select
+The v0.1 machine interface is JSON report schema `1.1`. Consumers must select
 on `schemaVersion`, not the package version. The normative schema is
-[`report-schema-v1.json`](report-schema-v1.json).
+[`report-schema-v1.1.json`](report-schema-v1.1.json).
 
 `verify` is the fast, read-only path. It inspects artifacts and provenance but
 does not start containers or compute a digest unless a reference digest must be
@@ -27,9 +27,11 @@ The default report prints both dimensions:
 ```text
 Recovery preconditions: INDETERMINATE
 Offline structural restore: NOT_RUN
+Backup Splice version: UNKNOWN (UNKNOWN)
+Network Splice version: UNKNOWN (UNKNOWN)
 ```
 
-The JSON equivalent keeps `preconditions` and `structuralRestore` as sibling
+The JSON equivalent keeps `preconditions`, `versions`, and `structuralRestore` as sibling
 objects. `MET` means only that every applicable, shipped recovery-precondition
 check had sufficient evidence and passed. It never means `RECOVERABLE` and does
 not prove synchronizer catch-up.
@@ -75,20 +77,22 @@ capture timestamp from mtime.
 `crv init-config [path]` writes a commented, runnable `crv.yaml` and refuses to
 overwrite an existing file. Pass it with `--config <path>`. A horizon has no
 evidentiary value without `sequencerHorizonSource`; an LSU usability assertion
-likewise requires its source. Watch state defaults to `.crv/state.json` and
-reports to `crv-reports`, both outside backup artifacts.
+likewise requires its source. `network.scanVersionUrl` is optional; when absent,
+verification stays offline. When configured, an unavailable or malformed public
+Scan version response is informational `UNKNOWN` and never changes a check
+verdict. Watch state defaults to `.crv/state.json` and reports to `crv-reports`,
+both outside backup artifacts.
 
 ## Drill runtime boundary
 
-v0.1 fast inspection supports the source-reviewed Splice 0.6.0–0.6.14 D2
-schema family. The containerized runtime drill is narrower: it refuses to run
-without exact Splice 0.6.11 evidence and PostgreSQL 14 compatibility. The error
-identifies the version as not yet drill-validated and states that fast `verify`
-remains available. It uses
-pinned image digests, an internal Docker network, and exact-name disposable
-containers/network/volume. `PASSED` requires SQL restore, participant
-`SERVING`, selected-DB identity equality, network isolation, and verified
-cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
+Fast inspection enables D2 only for an exact schema family recorded in
+`compatibility.json`; release numbers do not select adapters. The drill requires
+one exact artifact Splice version. Recorded versions use their tested pinned
+digest and may report `PASSED`. Unrecorded versions pull the exact tag, resolve
+and run one immutable digest, and may report `PASSED_UNVERIFIED_VERSION`. Pull or
+digest-resolution failure returns unsupported input while fast `verify` remains
+available. Both passing statuses require SQL restore, participant `SERVING`,
+selected-DB identity equality, network isolation, and verified cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
 
 ## Watch state
 
