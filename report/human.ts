@@ -17,6 +17,8 @@ export function formatReport(report: VerificationReport): string {
   const output = [
     `Recovery preconditions: ${report.preconditions.verdict}`,
     `Offline structural restore: ${structural.status}`,
+    `Backup Splice version: ${report.versions.backup.value ?? "UNKNOWN"} (${report.versions.backup.status})`,
+    `Network Splice version: ${report.versions.network.value ?? "UNKNOWN"} (${report.versions.network.status})`,
   ];
   if (structural.status !== "NOT_RUN") {
     output.push(
@@ -24,6 +26,9 @@ export function formatReport(report: VerificationReport): string {
       `  Participant serving: ${yesNo(structural.participantServing)}`,
       `  Identity matched: ${yesNo(structural.identityMatched)}`,
       `  Network isolated: ${yesNo(structural.networkIsolated)}`,
+      `  Runtime Splice version: ${structural.runtime.spliceVersion ?? "UNKNOWN"}`,
+      `  Participant image: ${structural.runtime.participantImage ?? "UNKNOWN"}`,
+      `  Runtime version evidence: ${structural.runtime.versionEvidence ?? "UNKNOWN"}`,
       ...structural.details.map((detail) => `  Detail: ${detail}`),
     );
   }

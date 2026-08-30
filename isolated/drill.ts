@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { compatibility } from "../compatibility.js";
 import type { ArtifactInspection } from "../types.js";
 import { inspectBackupSet, type BackupSetInspection } from "../backup-set.js";
 import { checkSelectedIdentity } from "../checks/selected-identity.js";
@@ -8,27 +9,13 @@ import { aggregate, exitCode } from "../report/aggregate.js";
 import { formatReport } from "../report/human.js";
 import type { VerificationReport } from "../types.js";
 import { buildVerificationReport } from "../verify.js";
+import { observeNetworkVersion } from "../versions.js";
 import { DrillResources, runProcess, streamDockerInput } from "./docker.js";
-
-const POSTGRES_IMAGE = "postgres@sha256:156f0b253fd61366d5fc2107ad45955027d5612f695a8436ce20167f3fa79bff";
-const PARTICIPANT_IMAGE = "ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant@sha256:d0a47b860f14bb4ea8b63f185eadca5f9fca7eb744f147e2de9046fb35cc8d52";
-const DRILL_SPLICE_VERSION = "0.6.11";
+import { resolveDrillRuntime, type DrillRuntime } from "./runtime.js";
 
 function artifactRoles(set: BackupSetInspection, artifact: ArtifactInspection): string[] {
   if (!artifact.roles.includes("unknown")) return artifact.roles;
   return set.manifest?.artifacts.find((reference) => reference.path === artifact.path)?.roles ?? artifact.roles;
-}
-
-function exactDrillVersion(set: BackupSetInspection): string {
-  const values = new Set<string>();
-  if (set.manifest?.declared.spliceVersion) values.add(set.manifest.declared.spliceVersion);
-  for (const artifact of set.artifacts) if (artifact.spliceVersion) values.add(artifact.spliceVersion);
-  if (values.size !== 1) throw new UnsupportedInputError("crv drill requires one exact Splice version from manifest or identities export");
-  const version = [...values][0];
-  if (version !== DRILL_SPLICE_VERSION) {
-    throw new UnsupportedInputError(`Splice ${version ?? "unknown"} is not yet validated for crv drill. crv verify still runs fast checks; D2 coverage is source-reviewed for Splice 0.6.0-0.6.14.`);
-  }
-  return version;
 }
 
 function sanitizeDrillError(error: Error): string {
@@ -78,6 +65,7 @@ async function executeDrill(
   set: BackupSetInspection,
   config: CrvConfig | null,
   report: VerificationReport,
+  runtime: DrillRuntime,
 ): Promise<{ participantId: string | null; participantDatabase: string; error: Error | null }> {
   const resources = new DrillResources();
   const details = report.structuralRestore.details;
@@ -105,7 +93,7 @@ async function executeDrill(
       "--label", `crv.run=${resources.id}`, "-v", `${resources.volume}:/var/lib/postgresql/data`,
       "-e", "POSTGRES_USER=postgres", "-e", `POSTGRES_PASSWORD=${password}`,
       "--health-cmd=pg_isready -U postgres", "--health-interval=1s", "--health-timeout=3s", "--health-retries=60",
-      POSTGRES_IMAGE,
+      runtime.postgresImage,
     ]);
     await resources.waitHealthy(resources.postgres, 90);
 
@@ -155,9 +143,9 @@ async function executeDrill(
       "-e", "AUTH_JWKS_URL=http://127.0.0.1:1", "-e", "AUTH_TARGET_AUDIENCE=https://canton.network.global",
       "-e", "CANTON_PARTICIPANT_ADMIN_USER_NAME=ledger-api-user",
       "-e", "ADDITIONAL_CONFIG_LEDGER_AUTH=canton.participants.participant.ledger-api.auth-services=[]",
-      PARTICIPANT_IMAGE,
+      runtime.participantImage,
     ]);
-    await resources.waitHealthy(resources.participant, 120);
+    await resources.waitHealthy(resources.participant, compatibility.runtime.participantStartupTimeoutSeconds);
     participantServing = true;
 
     const identity = await runProcess("docker", [
@@ -165,7 +153,7 @@ async function executeDrill(
       "select 'PAR::' || identifier || '::' || namespace from participant.common_node_id where identifier='participant'",
     ]);
     participantId = identity.stdout.trim() || null;
-    details.push(`runtime=${DRILL_SPLICE_VERSION}`, `postgresImage=${POSTGRES_IMAGE}`, `participantImage=${PARTICIPANT_IMAGE}`);
+    details.push(`runtime=${runtime.spliceVersion}`, `postgresImage=${runtime.postgresImage}`, `participantImage=${runtime.participantImage}`, `versionEvidence=${runtime.versionEvidence}`);
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     details.push("drillError=" + sanitizeDrillError(failure));
@@ -197,7 +185,6 @@ export async function drill(input: string, configPath?: string, now = new Date()
     inspectBackupSet(input),
     configPath === undefined ? Promise.resolve<CrvConfig | null>(null) : loadConfig(configPath),
   ]);
-  exactDrillVersion(set);
   const databaseArtifacts = set.artifacts.filter((artifact) => {
     const roles = artifactRoles(set, artifact);
     return ["plain_dump", "custom_dump", "cluster_dump"].includes(artifact.format) &&
@@ -207,19 +194,29 @@ export async function drill(input: string, configPath?: string, now = new Date()
   if (unknownPostgres) {
     throw new UnsupportedInputError(`crv drill requires PostgreSQL source version evidence for ${unknownPostgres.path}`);
   }
+  const runtime = await resolveDrillRuntime(set);
+  const postgresPattern = new RegExp(`^${runtime.postgresMajor}(?:\\.|\\s|$)`);
   const unsupportedPostgres = databaseArtifacts
     .map((artifact) => artifact.postgresSourceVersion as string)
-    .find((version) => !/^14(?:\.|\s|$)/.test(version));
-  if (unsupportedPostgres) throw new UnsupportedInputError(`isolated runtime drill supports PostgreSQL 14 artifacts; received ${unsupportedPostgres}`);
+    .find((version) => !postgresPattern.test(version));
+  if (unsupportedPostgres) throw new UnsupportedInputError(`isolated runtime drill supports PostgreSQL ${runtime.postgresMajor} artifacts; received ${unsupportedPostgres}`);
 
   const report = buildVerificationReport(input, set, config, now);
-  const result = await executeDrill(set, config, report);
+  report.versions.network = await observeNetworkVersion(config);
+  report.structuralRestore.runtime = {
+    spliceVersion: runtime.spliceVersion,
+    participantImage: runtime.participantImage,
+    versionEvidence: runtime.versionEvidence,
+    testedAt: runtime.testedAt,
+    evidence: runtime.evidence,
+  };
+  const result = await executeDrill(set, config, report, runtime);
   const expected = expectedIdentity(set, config);
   const identityMatched = result.error === null && expected !== null ? result.participantId === expected : false;
   report.structuralRestore.identityMatched = result.error !== null || expected === null ? null : identityMatched;
   report.structuralRestore.status = result.error === null && report.structuralRestore.sqlRestored === true &&
     report.structuralRestore.participantServing === true && report.structuralRestore.networkIsolated === true && identityMatched
-    ? "PASSED"
+    ? (runtime.versionEvidence === "TESTED" ? "PASSED" : "PASSED_UNVERIFIED_VERSION")
     : "FAILED";
 
   const selectedIndex = report.checks.findIndex((check) => check.id === "deployment.selected_identity");

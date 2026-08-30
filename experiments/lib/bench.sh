@@ -6,8 +6,21 @@ CRV_BENCH_ROOT=${CRV_BENCH_ROOT:-"$CRV_ROOT/.crv-bench"}
 CRV_QUICKSTART="$CRV_BENCH_ROOT/cn-quickstart"
 CRV_ARTIFACTS="$CRV_BENCH_ROOT/artifacts"
 CRV_QUICKSTART_COMMIT=3c8ca2fe7e45fc692f089d57909944410fe0f61c
-CRV_IMAGE_TAG=0.6.11
+CRV_IMAGE_TAG=${CRV_IMAGE_TAG:-0.6.11}
 CRV_LOCALNET="$CRV_QUICKSTART/quickstart/docker/modules/localnet"
+compose_command() {
+  if [[ -n "${CRV_COMPOSE:-}" ]]; then
+    "$CRV_COMPOSE" "$@"
+  elif docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif command -v docker-compose >/dev/null; then
+    docker-compose "$@"
+  else
+    echo "missing Docker Compose; set CRV_COMPOSE to a standalone binary" >&2
+    return 2
+  fi
+}
+
 
 need() {
   command -v "$1" >/dev/null || { echo "missing required command: $1" >&2; exit 2; }
@@ -20,7 +33,7 @@ prepare_bench() {
   need rg
   need curl
   need openssl
-  docker compose version >/dev/null
+  compose_command version >/dev/null
   mkdir -p "$CRV_BENCH_ROOT" "$CRV_ARTIFACTS"
   if [[ ! -d "$CRV_QUICKSTART/.git" ]]; then
     git clone https://github.com/digital-asset/cn-quickstart.git "$CRV_QUICKSTART"
@@ -40,7 +53,7 @@ compose_bench() {
   (
     cd "$CRV_QUICKSTART/quickstart"
     IMAGE_TAG="$CRV_IMAGE_TAG" DOCKER_NETWORK=crv-bench-net APP_USER_PROFILE=off \
-      docker compose -p crv-bench \
+      compose_command -p crv-bench \
       -f docker/modules/localnet/compose.yaml \
       -f docker/modules/localnet/resource-constraints.yaml \
       --env-file .env \

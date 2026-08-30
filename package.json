@@ -11,8 +11,12 @@
     "dist/**/*.js",
     "!dist/test/**",
     "README.md",
+    "compatibility.json",
     "LICENSE",
     "docs/report-schema-v1.json",
+    "docs/report-schema-v1.1.json",
+    "docs/version-policy.md",
+    "docs/version-matrix.md",
     "docs/manifest-schema-v1.json"
   ],
   "engines": {

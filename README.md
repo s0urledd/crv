@@ -32,6 +32,8 @@ intrinsic offset invariant fails:
 $ crv verify test/fixtures/reversed
 Recovery preconditions: FAILED
 Offline structural restore: NOT_RUN
+Backup Splice version: UNKNOWN (UNKNOWN)
+Network Splice version: UNKNOWN (UNKNOWN)
 
 STATUS  CHECK                CLASS             RESULT
 FAIL    backup.offset_order  proven invariant  Validator offset 66 exceeds participant ledger end 65.
@@ -45,7 +47,7 @@ Use JSON for automation:
 crv verify /backups/latest --config /etc/crv/crv.yaml --json
 ```
 
-Report schema: [`docs/report-schema-v1.json`](docs/report-schema-v1.json).
+Report schema: [`docs/report-schema-v1.1.json`](docs/report-schema-v1.1.json).
 Exit codes: `0` MET, `1` AT_RISK, `2` FAILED, `3` INDETERMINATE,
 `64` usage, `65` unsupported input/version, `70` execution error.
 
@@ -69,7 +71,9 @@ persisting any non-MET verdict.
 Run `crv manifest <dir>` beside artifacts to record relative paths, sizes, and
 SHA-256 references. Fill declared capture/deployment provenance explicitly.
 The command never derives capture time from mtime. Missing declared values make
-only dependent checks `UNKNOWN`.
+only dependent checks `UNKNOWN`. Configure `network.scanVersionUrl` only when
+you want the public Scan `/api/scan/version` reported beside the backup version;
+the default remains offline and Scan failure never fails a backup check.
 
 Timing scope matters: 23.7 seconds measured only a warm `crv drill` after
 artifact capture with images cached. The 6m12s GitHub CI job included checkout,
@@ -100,11 +104,14 @@ compression detection use artifact bytes, not filenames. Multi-database
 `pg_dumpall` requires declared participant and validator DB names when selection
 would otherwise be ambiguous.
 
-Fast D2 inspection is source-reviewed for Splice 0.6.0–0.6.14 with PostgreSQL
-14. The disposable runtime drill is tested and enabled only for exact Splice
-0.6.11 evidence and PostgreSQL 14. For example, Splice 0.6.9 is reported as
-"not yet validated for drill" while `verify` remains available; CRV does not
-present missing runtime evidence as a broken backup. See [`docs/version-matrix.md`](docs/version-matrix.md).
+Fast D2 inspection binds to exact schema shapes recorded in `compatibility.json`;
+a release number never selects an adapter. The disposable drill requires one exact
+artifact version. LocalNet drill evidence currently records 0.6.9, 0.6.11, and
+0.6.14. Recorded versions use a tested pinned digest; unrecorded versions
+resolve and run an immutable image digest and report
+`PASSED_UNVERIFIED_VERSION` after the same assertions pass. See
+[`docs/version-policy.md`](docs/version-policy.md) and
+[`docs/version-matrix.md`](docs/version-matrix.md).
 
 ## Non-goals
 

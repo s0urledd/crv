@@ -19,8 +19,8 @@ npm run build >/dev/null
 sha256sum "$work"/*.sql "$work/identities.json" >"$work/before.sha256"
 node dist/cli.js manifest "$work" >/dev/null
 expected=$(jq -r .id "$work/identities.json")
-jq --arg expected "$expected" \
-  '.declared.spliceVersion="0.6.11"
+jq --arg expected "$expected" --arg splice_version "$CRV_IMAGE_TAG" \
+  '.declared.spliceVersion=$splice_version
    | .declared.participantDatabase="participant-app-provider"
    | .declared.validatorDatabase="validator-app-provider"
    | .declared.expectedParticipantId=$expected' \
@@ -28,7 +28,11 @@ jq --arg expected "$expected" \
 mv "$work/crv-manifest.next" "$work/crv-manifest.json"
 
 set +e
-node dist/cli.js drill "$work"
+if [[ -n "${CRV_DRILL_REPORT_PATH:-}" ]]; then
+  node dist/cli.js drill "$work" --json >"$CRV_DRILL_REPORT_PATH"
+else
+  node dist/cli.js drill "$work"
+fi
 status=$?
 set -e
 if [[ "$status" -ne 3 ]]; then

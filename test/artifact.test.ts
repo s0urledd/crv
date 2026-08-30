@@ -75,7 +75,7 @@ set -euo pipefail
 if [[ " $* " == *" -l "* ]]; then
   printf "; Archive created at 2026-08-29 00:00:00 UTC\\n;     dbname: participant-app-provider\\n;     Dumped from database version: 14.24\\n;     Dumped by pg_dump version: 14.24\\n"
 elif [[ " $* " == *" -t lapi_parameters -f - "* ]]; then
-  printf "COPY participant.lapi_parameters (ledger_end, participant_id) FROM stdin;\\n65\\tparticipant\\n\\\\.\\n"
+  printf "COPY participant.lapi_parameters (ledger_end, participant_id, participant_pruned_up_to_inclusive, ledger_end_sequential_id, ledger_end_string_interning_id, ledger_end_publication_time) FROM stdin;\\n65\\tparticipant\\t\\\\N\\t1\\t1\\t0\\n\\\\.\\n"
 elif [[ " $* " == *" -t store_last_ingested_offsets -f - "* ]]; then
   exit 0
 else
@@ -88,6 +88,7 @@ fi
     assert.deepEqual(artifact.roles, ["participant"]);
     assert.equal(artifact.sourceDatabase, "participant-app-provider");
     assert.equal(artifact.offsets[0]?.participantLedgerEnd, "65");
+    assert.deepEqual(artifact.schemaFamilies, ["splice-d2-offset-v1"]);
   } finally {
     process.env.PATH = previousPath;
     await rm(directory, { recursive: true, force: true });

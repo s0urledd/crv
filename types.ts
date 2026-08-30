@@ -1,4 +1,4 @@
-export const REPORT_SCHEMA_VERSION = "1.0" as const;
+export const REPORT_SCHEMA_VERSION = "1.1" as const;
 
 export type EvidenceClass =
   | "proven_invariant"
@@ -10,7 +10,9 @@ export type EvidenceClass =
 export type CheckStatus = "PASS" | "FAIL" | "WARN" | "UNKNOWN";
 export type CheckSeverity = "error" | "warning" | "info";
 export type PreconditionsVerdict = "MET" | "AT_RISK" | "FAILED" | "INDETERMINATE";
-export type StructuralStatus = "NOT_RUN" | "PASSED" | "FAILED";
+export type StructuralStatus = "NOT_RUN" | "PASSED" | "PASSED_UNVERIFIED_VERSION" | "FAILED";
+export type VersionObservationStatus = "OBSERVED" | "UNKNOWN";
+export type DrillVersionEvidence = "TESTED" | "UNVERIFIED" | null;
 
 export interface CheckDefinition {
   id: string;
@@ -59,6 +61,7 @@ export interface ArtifactInspection {
   spliceVersion: string | null;
   participantId: string | null;
   identityStructureValid: boolean | null;
+  schemaFamilies: string[];
   offsets: OffsetEvidence[];
   limitations: string[];
 }
@@ -69,7 +72,22 @@ export interface StructuralEvidence {
   participantServing: boolean | null;
   identityMatched: boolean | null;
   networkIsolated: boolean | null;
+  runtime: {
+    spliceVersion: string | null;
+    participantImage: string | null;
+    versionEvidence: DrillVersionEvidence;
+    testedAt: string | null;
+    evidence: string | null;
+  };
   details: string[];
+}
+
+export interface VersionObservation {
+  status: VersionObservationStatus;
+  value: string | null;
+  source: string | null;
+  commitTs: string | null;
+  detail: string;
 }
 
 export interface VerificationReport {
@@ -83,6 +101,10 @@ export interface VerificationReport {
     fail: number;
     warn: number;
     unknown: number;
+  };
+  versions: {
+    backup: VersionObservation;
+    network: VersionObservation;
   };
   structuralRestore: StructuralEvidence;
   artifacts: ArtifactInspection[];

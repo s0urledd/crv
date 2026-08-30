@@ -1,28 +1,44 @@
 # Supported Splice versions
 
-v0.1 separates source compatibility from runtime-drill evidence. A check runs
-only when its required artifact schema is recognized; a release number is never
-inferred from a Flyway version or filename.
+CRV separates artifact-schema compatibility from runtime-drill evidence. See
+[the version policy](version-policy.md).
 
-## Matrix
+## Artifact checks
 
-| Splice versions | Compose participant DB selection | Validator DB | PostgreSQL | Evidence |
-| --- | --- | --- | --- | --- |
-| 0.6.0–0.6.7 | `-m` is required; `participant-<migration_id>` | `validator` | 14 | Source-reviewed across every release tag |
-| 0.6.8–0.6.14 | no `-m`: `participant`; with `-m`: legacy `participant-<migration_id>` | `validator` | 14 | Source-reviewed across every release tag |
+Fast checks do not branch on a Splice release number. The runtime
+`compatibility.json` record binds each check to exact table and ordered-column
+shapes. The current `splice-d2-offset-v1` family was source-reviewed across
+public Splice 0.6.0–0.6.14 tags. An artifact with that exact shape enables D2
+even when its release is unknown. An unfamiliar shape makes only dependent
+checks `UNKNOWN`.
 
-The `validator.store_last_ingested_offsets` table definition is byte-for-byte
-identical across all 0.6.0–0.6.14 release tags. Its latest-migration offset is
-therefore one supported D2 adapter family, not fifteen version branches.
+The release review remains useful evidence about where a family was observed;
+it is not a version allowlist.
 
-The participant-side `lapi_parameters.ledger_end` query and isolated participant
-startup were exercised end to end on Splice 0.6.11. Other source-reviewed 0.6.0-0.6.14 releases are
-source-compatible for fast artifact inspection but are not yet claimed as
-runtime-drill tested. Every release must state this distinction.
+## Isolated drill evidence
 
-The CLI makes this an evidence limitation, not an artifact failure. For example,
-`crv drill` reports Splice 0.6.9 as not yet validated and directs the operator
-to `crv verify`, whose D2 adapter is source-reviewed for 0.6.0-0.6.14.
+| Splice version | PostgreSQL | Participant image | Evidence |
+| --- | ---: | --- | --- |
+| 0.6.9 | 14 | Pinned digest in `compatibility.json` | LocalNet drill recorded 2026-08-30 |
+| 0.6.11 | 14 | Pinned digest in `compatibility.json` | LocalNet CI drill recorded 2026-08-30 |
+| 0.6.14 | 14 | Pinned digest in `compatibility.json` | LocalNet compatibility-watch drill recorded 2026-08-30 |
+
+One exact version must be available from an identities export or manifest.
+Recorded versions use their pinned digest and may report `PASSED`. An
+unrecorded version is not rejected: CRV pulls its exact tag, resolves and runs
+an immutable digest, and may report `PASSED_UNVERIFIED_VERSION`. A pull or
+digest-resolution failure stops only the drill; fast verification remains
+available.
+
+## Deployment naming evidence
+
+| Splice versions reviewed | Compose participant DB selection | Validator DB | PostgreSQL |
+| --- | --- | --- | --- |
+| 0.6.0–0.6.7 | `-m` is required; `participant-<migration_id>` | `validator` | 14 |
+| 0.6.8–0.6.14 | no `-m`: `participant`; with `-m`: legacy `participant-<migration_id>` | `validator` | 14 |
+
+Database selection is deployment provenance. It does not select an offset
+adapter and does not predict drill success.
 
 ## Version evidence
 
@@ -30,24 +46,14 @@ to `crv verify`, whose D2 adapter is source-reviewed for 0.6.0-0.6.14.
 | --- | --- | --- |
 | Identities export `version` | INTRINSIC | Record the exact value. |
 | Capture manifest `spliceVersion` | DECLARED | Trust only as declared provenance; report its source. |
-| Running image tag or digest | DERIVED | Compare when deployment evidence is supplied. |
+| Configured Scan `/api/scan/version` | DERIVED | Report network `version` and `commit_ts`; failure is informational `UNKNOWN`. |
 | Plain/custom/cluster database dump | Unavailable | Do not map Flyway schema versions to an exact Splice release. |
-| Recognized D2 tables and columns | INTRINSIC schema adapter | Run only the invariant implemented for that exact schema shape. |
-
-If a declared or intrinsic version is outside 0.6.0–0.6.14, v0.1 reports the
-version as unsupported and does not run version-sensitive checks. Structural
-inspection may still identify the artifact, but it must not produce a recovery-
-precondition pass. If no exact version is available, schema-intrinsic checks may
-run while version-dependent checks explain which manifest or deployment value
-would resolve `UNKNOWN`.
+| Recognized D2 tables and columns | INTRINSIC schema family | Run only the invariant implemented for that exact shape. |
 
 ## Primary sources
 
-- `canton-network/splice` release tags 0.6.0 through 0.6.14,
-  `cluster/compose/validator/start.sh` and `compose.yaml`.
-- `apps/common/src/main/resources/db/migration/canton-network/postgres/stable/V001__create_schema.sql`
-  at every 0.6.x tag.
-- Runtime evidence: the pinned 0.6.11 `cn-quickstart` drill in
-  [Phase 1 discovery](discovery.md). The source scan is reproducible with
-  [`experiments/07-version-matrix.sh`](../experiments/07-version-matrix.sh); its
-  recorded output is [`docs/raw/v1-version-matrix.txt`](raw/v1-version-matrix.txt).
+- `canton-network/splice` release tags and
+  `apps/common/src/main/resources/db/migration/canton-network/postgres/stable/V001__create_schema.sql`.
+- Runtime evidence in `compatibility.json` and the linked CI run.
+- Source scan: [`experiments/07-version-matrix.sh`](../experiments/07-version-matrix.sh)
+  and [recorded output](raw/v1-version-matrix.txt).
