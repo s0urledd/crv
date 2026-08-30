@@ -1,26 +1,102 @@
 # crv
 
-`crv` will verify recovery preconditions for backup artifacts from a Splice
-validator operator's existing backup process. It will emit one evidence-backed
-verdict, an exit code, and a JSON report. It is in discovery; there is no v0.1
-binary yet.
+`crv` verifies recovery preconditions in artifacts produced by an existing Splice validator backup process.
+It emits one evidence-backed verdict, an exit code, and a stable JSON report without changing backup artifacts.
+`crv drill` separately proves that a selected set restores to a network-isolated participant with its identity intact.
 
-Read [the discovery report](docs/discovery.md). Reproduce its LocalNet evidence
-with the commands in [experiments](experiments/README.md). Phase 2 is gated on
-review of that evidence.
+## Install
 
-## Evidence and manifests
+Requires Node 22. Fast inspection of custom archives also requires a compatible
+`pg_restore`; xz, bzip2, and zstd files require their matching decoder.
 
-`crv` first uses evidence intrinsic to artifacts. A validator offset ahead of
-the participant ledger end proves that the pair is internally inconsistent;
-detecting that violation does not require a manifest or a backup process
-created by `crv`.
+```sh
+git clone https://github.com/s0urledd/crv.git
+cd crv
+npm ci
+npm run build
+npm link
+```
 
-A manifest supplies provenance that artifacts do not contain reliably: capture
-start and completion times, selected database, deployment version, and
-synchronizer identity. It sits beside artifacts created by the operator's
-existing backup job and never changes them. A missing declared value makes only
-the dependent check `UNKNOWN`; it must never silently pass.
+## Verify a set
+
+```sh
+crv verify /backups/validator/2026-08-29 --config /etc/crv/crv.yaml
+```
+
+A reversed LocalNet pair restores cleanly in PostgreSQL and still fails the
+intrinsic offset invariant:
+
+```text
+$ crv verify test/fixtures/reversed
+Recovery preconditions: FAILED
+Offline structural restore: NOT_RUN
+
+STATUS  CHECK                CLASS             RESULT
+FAIL    backup.offset_order  proven invariant  Validator offset 66 exceeds participant ledger end 65.
+
+This verdict does not prove synchronizer catch-up or complete recovery success.
+```
+
+Use JSON for automation:
+
+```sh
+crv verify /backups/latest --config /etc/crv/crv.yaml --json
+```
+
+Report schema: [`docs/report-schema-v1.json`](docs/report-schema-v1.json).
+Exit codes: `0` MET, `1` AT_RISK, `2` FAILED, `3` INDETERMINATE,
+`64` usage, `65` unsupported input/version, `70` execution error.
+
+## Commands
+
+```text
+crv inspect <artifact> [--json]
+crv verify <backup-set|manifest> [--config <path>] [--json]
+crv drill <backup-set|manifest> [--config <path>] [--json]
+crv manifest <dir>
+crv watch <backup-set|manifest> --config <path> [--json]
+crv init-config [path]
+```
+
+`verify` is fast and starts no containers. `drill` restores into disposable
+containers on an internal Docker network and removes its exact containers,
+network, and volume on success, failure, and interruption. `watch` persists
+reports and state at paths declared in `crv.yaml`; it exits non-zero after
+persisting any non-MET verdict.
+
+Run `crv manifest <dir>` beside artifacts to record relative paths, sizes, and
+SHA-256 references. Fill declared capture/deployment provenance explicitly.
+The command never derives capture time from mtime. Missing declared values make
+only dependent checks `UNKNOWN`.
+
+## Checks
+
+| Check | Class | What it proves |
+| --- | --- | --- |
+| `backup.required_path` | Proven invariant | A participant/validator DB pair or identities fallback is present. |
+| `artifact.reference_digest` | Proven invariant | Current bytes and sizes equal capture-time manifest references. |
+| `backup.offset_order` | Proven invariant | Validator last-ingested offset does not exceed participant ledger end. |
+| `deployment.selected_identity` | Proven invariant | After an offline drill, the selected DB contains the expected participant identity. |
+| `backup.latest_age` | Recovery prerequisite | Capture age is below an explicitly sourced sequencer horizon. No 30-day constant is assumed. |
+| `network.lsu_path` | Recovery prerequisite | A pre-LSU set has sourced evidence for a usable old physical synchronizer path. |
+| `identities.structure` | Structural validation | The export has required JSON fields, canonical participant ID, strict base64, and required key names. Key bytes are never reported. |
+| Offline restore | Structural validation | SQL restores, participant reaches `SERVING`, identity matches, network is internal, and cleanup leaves no resources. |
+
+A structural PASS never upgrades the precondition verdict by itself. Every
+applicable `UNKNOWN` names the exact evidence needed to resolve it.
+
+## Inputs and versions
+
+Accept per-database plain/custom logical dumps, plain `pg_dumpall`, identities
+JSON, nested/date-based directories, and gzip/xz/bzip2/zstd wrappers. Format and
+compression detection use artifact bytes, not filenames. Multi-database
+`pg_dumpall` requires declared participant and validator DB names when selection
+would otherwise be ambiguous.
+
+Fast D2 inspection is source-reviewed for Splice 0.6.0–0.6.14 with PostgreSQL
+14. The disposable runtime drill is tested and enabled only for exact Splice
+0.6.11 evidence and PostgreSQL 14; other versions are refused rather than
+guessed. See [`docs/version-matrix.md`](docs/version-matrix.md).
 
 ## Non-goals
 
@@ -28,18 +104,19 @@ the dependent check `UNKNOWN`; it must never silently pass.
 - Does not perform production restores or failover.
 - Does not orchestrate party replication or participant migration. That is
   [canton-cro](https://github.com/canton-cro/canton-cro)'s scope; a `crv`
-  report is intended to be consumable by it.
+  report is intended to be consumed by it.
 - Does not provide deployment hardening, configuration management, a monitoring
-  or alerting platform, or a dashboard. It provides a verdict, an exit code,
-  and a JSON report; use the operator's existing scheduler and alerting.
+  or alerting platform, or a dashboard. Use the operator's scheduler and alerting.
 
-## Limits established in discovery
+## Limits
 
-An offline restore can prove that PostgreSQL accepted the data and a
-network-isolated participant reached `SERVING` with the backed-up identity. It
-cannot prove that the participant will catch up to the live synchronizer or
-that validator-app and participant state are semantically consistent. The
-final v0.1 vocabulary must therefore describe recovery preconditions, not claim
-that a backup is `RECOVERABLE`.
+Offline restore proves structural usability and identity continuity only. It
+cannot prove synchronizer catch-up, ACS agreement with peers, old-synchronizer
+availability, recovery of multi-hosted/external parties, or complete
+validator-app/participant semantic consistency beyond the offset invariant.
+Do not translate `MET` or structural `PASSED` into `RECOVERABLE`.
+
+Read the evidence in [`docs/discovery.md`](docs/discovery.md) and reproduce the
+CLI drill with [`experiments/08-cli-drill.sh`](experiments/08-cli-drill.sh).
 
 License: MIT.
