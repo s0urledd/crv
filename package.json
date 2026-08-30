@@ -8,7 +8,8 @@
     "crv": "dist/cli.js"
   },
   "files": [
-    "dist",
+    "dist/**/*.js",
+    "!dist/test/**",
     "README.md",
     "LICENSE",
     "docs/report-schema-v1.json",
@@ -19,6 +20,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "test": "npm run build && node --test dist/test/*.test.js",
     "check": "npm test"
   },
