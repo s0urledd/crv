@@ -1,8 +1,11 @@
 # Deferred work
 
-- Build v0.1 only after Phase 1 review.
-- Decide whether historical audit continuity should be a separate report axis
-  from immediate node recovery.
+- Add a historical-continuity report axis before checking backup spacing; it
+  must remain separate from immediate latest-set recovery.
+- Add a backup-frequency heuristic only with an explicit operator policy and
+  enough declared capture history to measure it.
+- Select the newest valid set from a directory only after verifying each
+  candidate; v0.1 requires the operator to select one set.
 - Test snapshot-provider metadata and isolated restore mechanics against a real
   Kubernetes cluster; Phase 1 maps Helm parity from charts only.
 - Add compatibility fixtures for newer Splice/Canton versions after v0.1.

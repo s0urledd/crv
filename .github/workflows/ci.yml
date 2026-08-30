@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node 22 tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install artifact decoders
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bzip2 xz-utils zstd
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+      - name: Check installed package
+        run: |
+          npm pack --json >"$RUNNER_TEMP/crv-pack.json"
+          tarball=$(jq -r '.[0].filename' "$RUNNER_TEMP/crv-pack.json")
+          if jq -er '.[0].files[].path | select(startswith("dist/test/"))' "$RUNNER_TEMP/crv-pack.json" >/dev/null; then
+            echo "npm package contains compiled tests" >&2
+            exit 1
+          fi
+          package_dir="$RUNNER_TEMP/crv-package"
+          npm install --prefix "$package_dir" "./$tarball"
+          test "$("$package_dir/node_modules/.bin/crv" --version)" = "0.1.0-beta.0"
+
+  localnet-drill:
+    name: LocalNet isolated drill
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install bench dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends jq ripgrep
+          npm ci
+      - name: Run isolated restore against LocalNet artifacts
+        run: ./experiments/08-cli-drill.sh
+      - name: Capture diagnostics
+        if: failure()
+        run: |
+          mkdir -p ci-artifacts
+          docker ps -a --no-trunc >ci-artifacts/docker-ps.txt
+          docker network ls >ci-artifacts/docker-networks.txt
+          docker volume ls >ci-artifacts/docker-volumes.txt
+          if [[ -d .crv-bench/cn-quickstart/.git ]]; then
+            source experiments/lib/bench.sh
+            compose_bench ps --all >ci-artifacts/bench-ps.txt 2>&1 || true
+            compose_bench logs --no-color >ci-artifacts/bench.log 2>&1 || true
+          fi
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: localnet-drill-diagnostics
+          path: ci-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Clean up disposable resources
+        if: always()
+        run: |
+          if [[ -d .crv-bench/cn-quickstart/.git ]]; then
+            ./experiments/stop.sh || true
+          fi
+          docker ps -aq --filter label=crv.run | xargs -r docker rm -f
+          docker network ls -q --filter label=crv.run | xargs -r docker network rm
+          docker volume ls -q --filter label=crv.run | xargs -r docker volume rm

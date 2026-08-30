@@ -1,0 +1,47 @@
+Evidence date: 2026-08-29
+Runtime: Node 22 container + Docker socket; LocalNet-generated artifacts only
+Participant runtime: Splice 0.6.11 pinned image digest
+PostgreSQL runtime: PostgreSQL 14 pinned image digest
+Network: Docker internal=true, no synchronizer container
+
+per-database set:
+- repeated end to end inside node:22-bookworm: PASSED; cleanup inventory empty
+- validator plain dump + participant plain dump + LocalNet identities export
+- reference digests matched
+- validator offset 31 <= participant ledger end 35
+- SQL restore: yes
+- participant SERVING: yes
+- selected DB identity matched expected identities export: yes
+- offline structural restore: PASSED
+- wall time: 23.7 seconds
+- post-run container/network/volume inventory with label crv.run: empty
+
+pg_dumpall set:
+- one 147 MB LocalNet whole-cluster plain dump + identities export
+- manifest selected participant-app-provider and validator-app-provider sections
+- validator offset 59 <= participant ledger end 61
+- SQL restore: yes
+- participant SERVING: yes
+- selected DB identity matched: yes
+- offline structural restore: PASSED
+- post-run container/network/volume inventory with label crv.run: empty
+
+truncated participant set:
+- manifest digest matched the already-truncated artifact; digest alone did not detect semantic truncation
+- psql: missing data for column during COPY
+- artifact row payload redacted from report
+- SQL restore: no
+- participant SERVING: no
+- identity match: UNKNOWN because the query was not reached
+- offline structural restore: FAILED
+- wall time: 9.8 seconds
+- post-failure container/network/volume inventory with label crv.run: empty
+
+SIGINT during pg_dumpall restore:
+- drill reported structural FAILED with write EPIPE
+- cleanup detail: verified-no-resources-remain
+- independent container/network/volume inventory with label crv.run: empty
+
+Claim ceiling: these runs prove structural restore, isolated participant startup,
+and identity equality. They do not prove synchronizer catch-up, ACS agreement,
+or complete validator/participant semantic consistency.

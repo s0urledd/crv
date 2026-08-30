@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/s0urledd/crv/blob/main/docs/report-schema-v1.json",
+  "title": "crv verification report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tool", "generatedAt", "subject", "preconditions", "structuralRestore", "artifacts", "checks"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "crv" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "manifest", "layout"],
+      "properties": {
+        "input": { "type": "string", "minLength": 1 },
+        "manifest": { "type": ["string", "null"] },
+        "layout": { "enum": ["single_artifact", "per_database", "cluster", "identities_only", "mixed", "unknown"] }
+      }
+    },
+    "preconditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "pass", "fail", "warn", "unknown"],
+      "properties": {
+        "verdict": { "enum": ["MET", "AT_RISK", "FAILED", "INDETERMINATE"] },
+        "pass": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "warn": { "type": "integer", "minimum": 0 },
+        "unknown": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "structuralRestore": { "$ref": "#/$defs/structuralEvidence" },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" }
+    }
+  },
+  "$defs": {
+    "nullableBoolean": { "type": ["boolean", "null"] },
+    "evidenceValue": {
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        { "type": "array", "items": { "$ref": "#/$defs/evidenceValue" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/evidenceValue" } }
+      ]
+    },
+    "offset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database"],
+      "properties": {
+        "database": { "type": ["string", "null"] },
+        "participantLedgerEnd": { "type": "string", "pattern": "^[0-9]+$" },
+        "validatorLastIngested": { "type": "string", "pattern": "^[0-9]+$" },
+        "validatorMigrationId": { "type": "string", "pattern": "^[0-9]+$" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "format", "compression", "roles", "sizeBytes", "sha256", "sourceDatabase", "databases", "postgresSourceVersion", "postgresDumperVersion", "archiveCreatedAt", "spliceVersion", "participantId", "identityStructureValid", "offsets", "limitations"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "description": "Path relative to the backup-set root; standalone inspect uses the supplied path." },
+        "format": { "enum": ["plain_dump", "custom_dump", "cluster_dump", "identities_json", "unknown"] },
+        "compression": { "enum": ["none", "gzip", "zstd", "xz", "bzip2", "unknown"] },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["participant", "validator", "identities", "cluster", "unknown"] }
+        },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] },
+        "sourceDatabase": { "type": ["string", "null"] },
+        "databases": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "postgresSourceVersion": { "type": ["string", "null"] },
+        "postgresDumperVersion": { "type": ["string", "null"] },
+        "archiveCreatedAt": { "type": ["string", "null"] },
+        "spliceVersion": { "type": ["string", "null"] },
+        "participantId": { "type": ["string", "null"] },
+        "identityStructureValid": { "type": ["boolean", "null"] },
+        "offsets": { "type": "array", "items": { "$ref": "#/$defs/offset" } },
+        "limitations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "severity", "evidenceClass", "title", "proves", "method", "remediation", "applicable", "status", "summary", "evidence", "requiredEvidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$" },
+        "severity": { "enum": ["error", "warning", "info"] },
+        "evidenceClass": { "enum": ["proven_invariant", "recovery_prerequisite", "heuristic", "structural_validation", "unverifiable"] },
+        "title": { "type": "string" },
+        "proves": { "type": "string" },
+        "method": { "type": "string" },
+        "remediation": { "type": "string" },
+        "applicable": { "type": "boolean" },
+        "status": { "enum": ["PASS", "FAIL", "WARN", "UNKNOWN"] },
+        "summary": { "type": "string" },
+        "evidence": { "type": "object", "additionalProperties": { "$ref": "#/$defs/evidenceValue" } },
+        "requiredEvidence": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "applicable": { "const": true }, "status": { "const": "UNKNOWN" } }, "required": ["applicable", "status"] },
+          "then": { "properties": { "requiredEvidence": { "type": "array", "minItems": 1 } } }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["PASS", "FAIL", "WARN"] } }, "required": ["status"] },
+          "then": { "properties": { "requiredEvidence": { "type": "array", "maxItems": 0 } } }
+        }
+      ]
+    },
+    "structuralEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "sqlRestored", "participantServing", "identityMatched", "networkIsolated", "details"],
+      "properties": {
+        "status": { "enum": ["NOT_RUN", "PASSED", "FAILED"] },
+        "sqlRestored": { "$ref": "#/$defs/nullableBoolean" },
+        "participantServing": { "$ref": "#/$defs/nullableBoolean" },
+        "identityMatched": { "$ref": "#/$defs/nullableBoolean" },
+        "networkIsolated": { "$ref": "#/$defs/nullableBoolean" },
+        "details": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

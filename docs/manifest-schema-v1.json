@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/s0urledd/crv/blob/main/docs/manifest-schema-v1.json",
+  "title": "crv capture manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "createdAt", "updatedAt", "declared", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "declared": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captureStartedAt", "validatorCompletedAt", "participantStartedAt", "captureCompletedAt",
+        "spliceVersion", "participantDatabase", "validatorDatabase", "expectedParticipantId",
+        "physicalSynchronizerId", "physicalSynchronizerSerial"
+      ],
+      "properties": {
+        "captureStartedAt": { "$ref": "#/$defs/nullableDate" },
+        "validatorCompletedAt": { "$ref": "#/$defs/nullableDate" },
+        "participantStartedAt": { "$ref": "#/$defs/nullableDate" },
+        "captureCompletedAt": { "$ref": "#/$defs/nullableDate" },
+        "spliceVersion": { "$ref": "#/$defs/nullableString" },
+        "participantDatabase": { "$ref": "#/$defs/nullableString" },
+        "validatorDatabase": { "$ref": "#/$defs/nullableString" },
+        "expectedParticipantId": { "$ref": "#/$defs/nullableString" },
+        "physicalSynchronizerId": { "$ref": "#/$defs/nullableString" },
+        "physicalSynchronizerSerial": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "format", "roles", "sizeBytes", "sha256"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$" },
+          "format": { "enum": ["plain_dump", "custom_dump", "cluster_dump", "identities_json", "unknown"] },
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["participant", "validator", "identities", "cluster", "unknown"] }
+          },
+          "sizeBytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nullableDate": { "oneOf": [{ "type": "null" }, { "type": "string", "format": "date-time" }] },
+    "nullableString": { "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }] }
+  }
+}

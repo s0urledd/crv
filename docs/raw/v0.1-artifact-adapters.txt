@@ -1,0 +1,22 @@
+Evidence date: 2026-08-29
+Fixtures: LocalNet-derived logical dump content only
+
+Compression classification is based on magic bytes, not filenames.
+- gzip: decoded and participant ledger_end 65 extracted
+- xz: decoded with external xz and ledger_end 65 extracted
+- bzip2: decoded with external bzip2 and ledger_end 65 extracted
+- zstd: decoded with external zstd and ledger_end 65 extracted
+- Node 22 minimal image lacks zstd by default; CRV reports decoder absence instead of guessing
+
+Custom PostgreSQL archive validation:
+- participant custom archive: 18,813,208 bytes; source DB participant-app-provider
+- participant lapi_parameters ledger_end extracted as 35
+- validator custom archive: 195,580 bytes; source DB validator-app-provider
+- validator latest-migration last_ingested_offset extracted as 31
+- manifest-free D2 result: PASS because 31 <= 35
+- required pg_restore extraction form: -a -t <unqualified-table> -f - <archive>
+
+A regression test fixes the pg_restore stdout flag and unqualified table-pattern
+contract without committing the 18 MB LocalNet archive. Custom archive
+inspection requires a compatible pg_restore on PATH. The isolated drill uses
+pg_restore from the pinned PostgreSQL 14 container instead.
