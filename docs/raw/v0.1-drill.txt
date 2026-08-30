@@ -4,6 +4,16 @@ Participant runtime: Splice 0.6.11 pinned image digest
 PostgreSQL runtime: PostgreSQL 14 pinned image digest
 Network: Docker internal=true, no synchronizer container
 
+Dataset identity:
+- D2 reversed-order fixture is a separate capture: validator 66 > participant 65, FAIL
+- per-database drill capture below: validator 31 <= participant 35, PASS
+- pg_dumpall drill capture below: validator 59 <= participant 61, PASS
+
+Timing scope:
+- 23.7 seconds below measured only the warm `crv drill` invocation after artifacts were captured and required images were cached
+- GitHub CI job 33296579192 took 6m12s on a fresh runner and included checkout, dependencies, cn-quickstart clone and image pulls, LocalNet boot, artifact capture, drill, and cleanup
+- these figures are different scopes, not comparable benchmarks
+
 per-database set:
 - repeated end to end inside node:22-bookworm: PASSED; cleanup inventory empty
 - validator plain dump + participant plain dump + LocalNet identities export

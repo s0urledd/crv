@@ -429,7 +429,7 @@ verification into recovery orchestration. It does not belong in `crv` v0.1.
 | --- | --- | --- |
 | Reversed order | Validator artifact offset 66 exceeds participant ledger end 65; restore and stack startup still green. | Intrinsic offset invariant fails without a manifest. |
 | Wrong migration-shaped DB selection | Participant health green, selected DB has no node identity. | Selected identity invariant fails. |
-| Truncated plain dump | `psql` exits non-zero with `missing data for column` during `COPY`. | Structural restore fails; digest also fails if reference exists. |
+| Truncated plain dump | `psql` exits non-zero with `missing data for column` during `COPY`. | Structural restore fails. A digest fails only when its trusted reference predates truncation; a manifest created from already-truncated bytes matches and cannot detect semantic incompleteness. |
 | Missing identities | Required recovery path absent. | Set completeness fails only when no valid DB path exists. |
 | 31-day-old backup | **Simulated timestamp arithmetic only.** | Age comparison fails against a sourced 30-day declared horizon; no claim about LocalNet pruning. |
 

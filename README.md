@@ -23,8 +23,10 @@ npm link
 crv verify /backups/validator/2026-08-29 --config /etc/crv/crv.yaml
 ```
 
-A reversed LocalNet pair restores cleanly in PostgreSQL and still fails the
-intrinsic offset invariant:
+The LocalNet-derived reversed fixture below contains participant ledger end 65
+and validator offset 66. It is distinct from the passing drill captures recorded
+in `docs/raw/v0.1-drill.txt`. PostgreSQL restore still succeeds, but the
+intrinsic offset invariant fails:
 
 ```text
 $ crv verify test/fixtures/reversed
@@ -69,6 +71,11 @@ SHA-256 references. Fill declared capture/deployment provenance explicitly.
 The command never derives capture time from mtime. Missing declared values make
 only dependent checks `UNKNOWN`.
 
+Timing scope matters: 23.7 seconds measured only a warm `crv drill` after
+artifact capture with images cached. The 6m12s GitHub CI job included checkout,
+dependencies, LocalNet clone/pull/boot, artifact capture, drill, and cleanup.
+They are not comparable benchmarks.
+
 ## Checks
 
 | Check | Class | What it proves |
@@ -95,8 +102,9 @@ would otherwise be ambiguous.
 
 Fast D2 inspection is source-reviewed for Splice 0.6.0–0.6.14 with PostgreSQL
 14. The disposable runtime drill is tested and enabled only for exact Splice
-0.6.11 evidence and PostgreSQL 14; other versions are refused rather than
-guessed. See [`docs/version-matrix.md`](docs/version-matrix.md).
+0.6.11 evidence and PostgreSQL 14. For example, Splice 0.6.9 is reported as
+"not yet validated for drill" while `verify` remains available; CRV does not
+present missing runtime evidence as a broken backup. See [`docs/version-matrix.md`](docs/version-matrix.md).
 
 ## Non-goals
 
@@ -109,6 +117,11 @@ guessed. See [`docs/version-matrix.md`](docs/version-matrix.md).
   or alerting platform, or a dashboard. Use the operator's scheduler and alerting.
 
 ## Limits
+
+A checksum can match and the backup can still fail to restore. In the LocalNet
+truncation test, a manifest created from the already-truncated bytes matched
+exactly, then PostgreSQL rejected the `COPY`. A digest detects change after a
+trusted reference; `drill` tests structural restoration.
 
 Offline restore proves structural usability and identity continuity only. It
 cannot prove synchronizer catch-up, ACS agreement with peers, old-synchronizer

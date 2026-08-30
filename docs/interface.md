@@ -82,7 +82,9 @@ reports to `crv-reports`, both outside backup artifacts.
 
 v0.1 fast inspection supports the source-reviewed Splice 0.6.0–0.6.14 D2
 schema family. The containerized runtime drill is narrower: it refuses to run
-without exact Splice 0.6.11 evidence and PostgreSQL 14 compatibility. It uses
+without exact Splice 0.6.11 evidence and PostgreSQL 14 compatibility. The error
+identifies the version as not yet drill-validated and states that fast `verify`
+remains available. It uses
 pinned image digests, an internal Docker network, and exact-name disposable
 containers/network/volume. `PASSED` requires SQL restore, participant
 `SERVING`, selected-DB identity equality, network isolation, and verified
