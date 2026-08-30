@@ -34,6 +34,7 @@ const config = (): CrvConfig => ({
   schemaVersion: "1.0",
   deployment: { participantDatabase: null, validatorDatabase: null, expectedParticipantId: null },
   network: {
+    scanVersionUrl: null,
     sequencerHorizonSeconds: null,
     sequencerHorizonSource: null,
     currentPhysicalSynchronizerId: null,

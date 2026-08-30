@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1.0",
+  "schemaFamilies": [
+    {
+      "id": "splice-d2-offset-v1",
+      "checks": [
+        "backup.offset_order"
+      ],
+      "sourceDefinitionSha256": "786ee6132fdecc135ee0aa41d2bec771dc4a2fc21b611d53471fb65722053d3e",
+      "shapes": {
+        "participant": {
+          "table": "participant.lapi_parameters",
+          "columns": [
+            "ledger_end",
+            "participant_id",
+            "participant_pruned_up_to_inclusive",
+            "ledger_end_sequential_id",
+            "ledger_end_string_interning_id",
+            "ledger_end_publication_time"
+          ],
+          "sha256": "29e26329b9e93bef14253fa9ad5294c960fdc110cb441b87fa7a40cff6130a3d"
+        },
+        "validator": {
+          "table": "validator.store_last_ingested_offsets",
+          "columns": [
+            "store_id",
+            "migration_id",
+            "last_ingested_offset"
+          ],
+          "sha256": "d4564fabdcfc21c26552957f586602396d679121906ce4d218ab5b55b5004e7e"
+        }
+      }
+    }
+  ],
+  "runtime": {
+    "participantImageRepository": "ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant",
+    "postgresImage": "postgres@sha256:156f0b253fd61366d5fc2107ad45955027d5612f695a8436ce20167f3fa79bff",
+    "postgresMajor": 14,
+    "drillEvidence": {
+      "0.6.11": {
+        "participantImage": "ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant@sha256:d0a47b860f14bb4ea8b63f185eadca5f9fca7eb744f147e2de9046fb35cc8d52",
+        "postgresMajor": 14,
+        "testedAt": "2026-08-30",
+        "evidence": "https://github.com/s0urledd/crv/actions/runs/33296579192"
+      },
+      "0.6.9": {
+        "participantImage": "ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant@sha256:3e0c9137e7edafceed60ba53eebfe28f5acd00e6664b9680961bf4a336ec0474",
+        "postgresMajor": 14,
+        "testedAt": "2026-08-30",
+        "evidence": "https://github.com/s0urledd/crv/blob/main/docs/raw/v0.1-drill-0.6.9.json"
+      },
+      "0.6.14": {
+        "participantImage": "ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant@sha256:85ee319f667aabcb9abd36ecbd22279ffeaa2a88fb774195872155b88d6b9137",
+        "postgresMajor": 14,
+        "testedAt": "2026-08-30",
+        "evidence": "https://github.com/s0urledd/crv/blob/main/docs/raw/v0.1-drill-0.6.14.json"
+      }
+    },
+    "participantStartupTimeoutSeconds": 240
+  }
+}

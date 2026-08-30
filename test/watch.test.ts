@@ -36,7 +36,7 @@ test("watch writes report and state beside config, then detects regression", asy
     assert.ok(first.reportPath.startsWith(join(directory, "reports")));
     assert.equal(first.statePath, join(directory, "state", "watch.json"));
     const report = JSON.parse(await readFile(first.reportPath, "utf8")) as { schemaVersion: string };
-    assert.equal(report.schemaVersion, "1.0");
+    assert.equal(report.schemaVersion, "1.1");
 
     await writeFile(first.statePath, JSON.stringify({
       schemaVersion: "1.0",

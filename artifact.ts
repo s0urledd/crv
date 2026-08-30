@@ -7,6 +7,7 @@ import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
+import { offsetRoleForTable, recognizeOffsetShape } from "./compatibility.js";
 import { UnsupportedInputError } from "./errors.js";
 import type {
   ArtifactCompression,
@@ -27,12 +28,15 @@ interface SqlInspection {
   databases: Set<string>;
   postgresSourceVersion: string | null;
   postgresDumperVersion: string | null;
+  schemaFamilies: Set<string>;
+  unrecognizedOffsetShapes: Set<string>;
   offsets: Map<string, OffsetAccumulator>;
 }
 
 interface CopyState {
   role: "participant" | "validator";
   columns: string[];
+  schemaFamily: string | null;
 }
 
 interface InspectionOptions {
@@ -47,6 +51,8 @@ function emptySqlInspection(): SqlInspection {
     databases: new Set<string>(),
     postgresSourceVersion: null,
     postgresDumperVersion: null,
+    schemaFamilies: new Set<string>(),
+    unrecognizedOffsetShapes: new Set<string>(),
     offsets: new Map<string, OffsetAccumulator>(),
   };
 }
@@ -77,12 +83,13 @@ function parseLegacyOffset(value: string): bigint | null {
 }
 
 function copyHeader(line: string): CopyState | null {
-  const match = line.match(/^COPY (participant\.lapi_parameters|validator\.store_last_ingested_offsets) \(([^)]+)\) FROM stdin;$/);
+  const match = line.match(/^COPY ([A-Za-z0-9_.]+) \(([^)]+)\) FROM stdin;$/);
   if (!match?.[1] || !match[2]) return null;
-  return {
-    role: match[1].startsWith("participant.") ? "participant" : "validator",
-    columns: match[2].split(",").map((column) => column.trim()),
-  };
+  const columns = match[2].split(",").map((column) => column.trim());
+  const role = offsetRoleForTable(match[1]);
+  if (role === null) return null;
+  const recognized = recognizeOffsetShape(match[1], columns);
+  return { role, columns, schemaFamily: recognized?.familyId ?? null };
 }
 
 function consumeSqlLine(
@@ -107,6 +114,8 @@ function consumeSqlLine(
   const header = copyHeader(line);
   if (header) {
     parsed.roles.add(header.role);
+    if (header.schemaFamily === null) parsed.unrecognizedOffsetShapes.add(header.role);
+    else parsed.schemaFamilies.add(header.schemaFamily);
     state.copy = header;
     return;
   }
@@ -114,7 +123,7 @@ function consumeSqlLine(
     state.copy = null;
     return;
   }
-  if (!state.copy || line.startsWith("--") || line.length === 0) return;
+  if (!state.copy || state.copy.schemaFamily === null || line.startsWith("--") || line.length === 0) return;
 
   const fields = line.split("\t");
   const entry = offsetEntry(parsed, state.database);
@@ -162,6 +171,8 @@ function parseSqlText(text: string, database: string | null): SqlInspection {
 function mergeSql(target: SqlInspection, source: SqlInspection): void {
   for (const role of source.roles) target.roles.add(role);
   for (const database of source.databases) target.databases.add(database);
+  for (const family of source.schemaFamilies) target.schemaFamilies.add(family);
+  for (const role of source.unrecognizedOffsetShapes) target.unrecognizedOffsetShapes.add(role);
   for (const [database, values] of source.offsets) {
     target.offsets.set(database, { ...target.offsets.get(database), ...values });
   }
@@ -299,6 +310,7 @@ async function inspectIdentities(
       spliceVersion: typeof value.version === "string" ? value.version : null,
       participantId: typeof value.id === "string" ? value.id : null,
       identityStructureValid: structure.valid,
+      schemaFamilies: [],
       offsets: [],
       limitations: [...structure.errors, "Party hint and successful re-onboarding are not intrinsic to this artifact."],
     };
@@ -337,6 +349,7 @@ async function inspectCustom(
       spliceVersion: null,
       participantId: null,
       identityStructureValid: null,
+      schemaFamilies: [],
       offsets: [],
       limitations,
     };
@@ -353,6 +366,7 @@ async function inspectCustom(
     if (extracted.status === 0 && extracted.stdout) mergeSql(parsed, parseSqlText(extracted.stdout, database));
   }
   if (parsed.roles.size === 0) limitations.push("The archive has no recognized CRV offset table or pg_restore could not extract it.");
+  if (parsed.unrecognizedOffsetShapes.size > 0) limitations.push(`Offset schema shape is not recognized for: ${[...parsed.unrecognizedOffsetShapes].sort().join(", ")}.`);
 
   return {
     path: displayPath,
@@ -369,6 +383,7 @@ async function inspectCustom(
     spliceVersion: null,
     participantId: null,
     identityStructureValid: null,
+    schemaFamilies: [...parsed.schemaFamilies].sort(),
     offsets: offsetEvidence(parsed),
     limitations,
   };
@@ -395,7 +410,7 @@ async function inspectUncompressed(
     return {
       path: displayPath, format: "unknown", compression, roles: ["unknown"], sizeBytes, sha256: digest,
       sourceDatabase: null, databases: [], postgresSourceVersion: null, postgresDumperVersion: null,
-      archiveCreatedAt: null, spliceVersion: null, participantId: null, identityStructureValid: null, offsets: [], limitations: ["Artifact format is not recognized."],
+      archiveCreatedAt: null, spliceVersion: null, participantId: null, identityStructureValid: null, schemaFamilies: [], offsets: [], limitations: ["Artifact format is not recognized."],
     };
   }
 
@@ -417,6 +432,7 @@ async function inspectUncompressed(
       spliceVersion: null,
       participantId: null,
       identityStructureValid: null,
+      schemaFamilies: [],
       offsets: [],
       limitations: ["Artifact format is not recognized."],
     };
@@ -437,10 +453,16 @@ async function inspectUncompressed(
     spliceVersion: null,
     participantId: null,
     identityStructureValid: null,
+    schemaFamilies: [...parsed.schemaFamilies].sort(),
     offsets: offsetEvidence(parsed),
-    limitations: parsed.cluster
-      ? ["A pg_dumpall artifact is sequential, not a cross-database snapshot."]
-      : ["A per-database plain dump does not reliably contain its source database name or capture time."],
+    limitations: [
+      ...(parsed.cluster
+        ? ["A pg_dumpall artifact is sequential, not a cross-database snapshot."]
+        : ["A per-database plain dump does not reliably contain its source database name or capture time."]),
+      ...(parsed.unrecognizedOffsetShapes.size > 0
+        ? [`Offset schema shape is not recognized for: ${[...parsed.unrecognizedOffsetShapes].sort().join(", ")}.`]
+        : []),
+    ],
   };
 }
 

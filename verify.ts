@@ -11,6 +11,7 @@ import { aggregate, exitCode } from "./report/aggregate.js";
 import { formatReport } from "./report/human.js";
 import { REPORT_SCHEMA_VERSION, type VerificationReport } from "./types.js";
 import { VERSION } from "./version.js";
+import { observeBackupVersion, observeNetworkVersion } from "./versions.js";
 
 export function buildVerificationReport(
   input: string,
@@ -38,12 +39,17 @@ export function buildVerificationReport(
     generatedAt: now.toISOString(),
     subject: { input, manifest: set.manifestPath, layout: set.layout },
     preconditions: aggregate(checks),
+    versions: {
+      backup: observeBackupVersion(set),
+      network: { status: "UNKNOWN", value: null, source: null, commitTs: null, detail: "Network version was not queried." },
+    },
     structuralRestore: {
       status: "NOT_RUN",
       sqlRestored: null,
       participantServing: null,
       identityMatched: null,
       networkIsolated: null,
+      runtime: { spliceVersion: null, participantImage: null, versionEvidence: null, testedAt: null, evidence: null },
       details: [],
     },
     artifacts,
@@ -56,7 +62,9 @@ export async function verify(input: string, configPath?: string, now = new Date(
     inspectBackupSet(input),
     configPath === undefined ? Promise.resolve<CrvConfig | null>(null) : loadConfig(configPath),
   ]);
-  return buildVerificationReport(input, set, config, now);
+  const report = buildVerificationReport(input, set, config, now);
+  report.versions.network = await observeNetworkVersion(config);
+  return report;
 }
 
 export async function runVerify(input: string, json: boolean, configPath?: string): Promise<number> {

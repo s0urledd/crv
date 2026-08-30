@@ -82,8 +82,8 @@ test("every applicable UNKNOWN names evidence that would resolve it", async () =
   }
 });
 
-test("generated report and manifest conform to their v1 JSON schemas", async () => {
-  const reportSchema = JSON.parse(await readFile(fixture("..", "..", "docs", "report-schema-v1.json"), "utf8")) as object;
+test("generated report and manifest conform to report v1.1 and manifest v1 JSON schemas", async () => {
+  const reportSchema = JSON.parse(await readFile(fixture("..", "..", "docs", "report-schema-v1.1.json"), "utf8")) as object;
   const manifestSchema = JSON.parse(await readFile(fixture("..", "..", "docs", "manifest-schema-v1.json"), "utf8")) as object;
   const ajv = new Ajv2020({ allErrors: true, allowUnionTypes: true, strict: true });
   addFormats(ajv);
@@ -92,6 +92,10 @@ test("generated report and manifest conform to their v1 JSON schemas", async () 
 
   const report = await verify(fixture("good"));
   assert.equal(validateReport(report), true, JSON.stringify(validateReport.errors));
+  for (const version of ["0.6.9", "0.6.14"]) {
+    const raw = JSON.parse(await readFile(fixture("..", "..", "docs", "raw", `v0.1-drill-${version}.json`), "utf8")) as unknown;
+    assert.equal(validateReport(raw), true, `${version}: ${JSON.stringify(validateReport.errors)}`);
+  }
 
   const temporary = await mkdtemp(join(tmpdir(), "crv-schema-"));
   const set = join(temporary, "set");

@@ -13,6 +13,7 @@ export interface CrvConfig {
     expectedParticipantId: string | null;
   };
   network: {
+    scanVersionUrl: string | null;
     sequencerHorizonSeconds: number | null;
     sequencerHorizonSource: string | null;
     currentPhysicalSynchronizerId: string | null;
@@ -41,6 +42,9 @@ deployment:
   expectedParticipantId: null
 
 network:
+  # Optional public Scan endpoint. Verification stays offline when null.
+  # Example: https://scan.example/api/scan/version
+  scanVersionUrl: null
   # Effective sequencer catch-up horizon. crv never assumes 30 days silently.
   sequencerHorizonSeconds: null
   # Versioned documentation URL/reference or network-operator source.
@@ -76,6 +80,18 @@ function nullableString(value: unknown, name: string): string | null {
   return value;
 }
 
+function nullableHttpUrl(value: unknown, name: string): string | null {
+  const parsed = nullableString(value, name);
+  if (parsed === null) return null;
+  let url: URL;
+  try { url = new URL(parsed); } catch { throw new UnsupportedInputError(`${name} must be an absolute HTTP(S) URL or null`); }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password ||
+      url.pathname !== "/api/scan/version" || url.search || url.hash) {
+    throw new UnsupportedInputError(`${name} must be an HTTP(S) /api/scan/version URL without credentials, query, or fragment`);
+  }
+  return url.toString();
+}
+
 function nullableInteger(value: unknown, name: string): number | null {
   if (value === null || value === undefined) return null;
   if (!Number.isSafeInteger(value) || (value as number) < 0) throw new UnsupportedInputError(`${name} must be a non-negative integer or null`);
@@ -109,7 +125,7 @@ export async function loadConfig(path: string): Promise<CrvConfig> {
   const watch = object(root.watch ?? {}, "config.watch");
   keys(deployment, ["participantDatabase", "validatorDatabase", "expectedParticipantId"], "config.deployment");
   keys(network, [
-    "sequencerHorizonSeconds", "sequencerHorizonSource", "currentPhysicalSynchronizerId",
+    "scanVersionUrl", "sequencerHorizonSeconds", "sequencerHorizonSource", "currentPhysicalSynchronizerId",
     "currentPhysicalSynchronizerSerial", "capturedPhysicalSynchronizerUsable",
     "capturedPhysicalSynchronizerUsabilitySource",
   ], "config.network");
@@ -126,6 +142,7 @@ export async function loadConfig(path: string): Promise<CrvConfig> {
       expectedParticipantId: nullableString(deployment.expectedParticipantId, "config.deployment.expectedParticipantId"),
     },
     network: {
+      scanVersionUrl: nullableHttpUrl(network.scanVersionUrl, "config.network.scanVersionUrl"),
       sequencerHorizonSeconds: nullableInteger(network.sequencerHorizonSeconds, "config.network.sequencerHorizonSeconds"),
       sequencerHorizonSource: nullableString(network.sequencerHorizonSource, "config.network.sequencerHorizonSource"),
       currentPhysicalSynchronizerId: nullableString(network.currentPhysicalSynchronizerId, "config.network.currentPhysicalSynchronizerId"),
