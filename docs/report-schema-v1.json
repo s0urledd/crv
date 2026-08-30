@@ -118,11 +118,11 @@
       "allOf": [
         {
           "if": { "properties": { "applicable": { "const": true }, "status": { "const": "UNKNOWN" } }, "required": ["applicable", "status"] },
-          "then": { "properties": { "requiredEvidence": { "minItems": 1 } } }
+          "then": { "properties": { "requiredEvidence": { "type": "array", "minItems": 1 } } }
         },
         {
           "if": { "properties": { "status": { "enum": ["PASS", "FAIL", "WARN"] } }, "required": ["status"] },
-          "then": { "properties": { "requiredEvidence": { "maxItems": 0 } } }
+          "then": { "properties": { "requiredEvidence": { "type": "array", "maxItems": 0 } } }
         }
       ]
     },

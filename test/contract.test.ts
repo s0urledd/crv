@@ -1,14 +1,20 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 import { inspectArtifact } from "../artifact.js";
+import { writeManifest } from "../manifest.js";
 import { verify } from "../verify.js";
 
 const fixture = (...parts: string[]) => resolve(process.cwd(), "test", "fixtures", ...parts);
+
+const requireFromTest = createRequire(import.meta.url);
+const Ajv2020 = requireFromTest("ajv/dist/2020.js").default as typeof import("ajv/dist/2020.js").default;
+const addFormats = requireFromTest("ajv-formats").default as typeof import("ajv-formats").default;
 
 async function snapshot(path: string): Promise<{ digest: string; size: number; mode: number; mtimeMs: number }> {
   const [bytes, metadata] = await Promise.all([readFile(path), stat(path)]);
@@ -73,5 +79,28 @@ test("every applicable UNKNOWN names evidence that would resolve it", async () =
   for (const check of unknown) assert.ok(check.requiredEvidence.length > 0, check.id);
   for (const check of report.checks.filter((candidate) => candidate.status !== "UNKNOWN")) {
     assert.deepEqual(check.requiredEvidence, [], check.id);
+  }
+});
+
+test("generated report and manifest conform to their v1 JSON schemas", async () => {
+  const reportSchema = JSON.parse(await readFile(fixture("..", "..", "docs", "report-schema-v1.json"), "utf8")) as object;
+  const manifestSchema = JSON.parse(await readFile(fixture("..", "..", "docs", "manifest-schema-v1.json"), "utf8")) as object;
+  const ajv = new Ajv2020({ allErrors: true, allowUnionTypes: true, strict: true });
+  addFormats(ajv);
+  const validateReport = ajv.compile(reportSchema);
+  const validateManifest = ajv.compile(manifestSchema);
+
+  const report = await verify(fixture("good"));
+  assert.equal(validateReport(report), true, JSON.stringify(validateReport.errors));
+
+  const temporary = await mkdtemp(join(tmpdir(), "crv-schema-"));
+  const set = join(temporary, "set");
+  try {
+    await cp(fixture("good"), set, { recursive: true });
+    const manifestPath = await writeManifest(set);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as unknown;
+    assert.equal(validateManifest(manifest), true, JSON.stringify(validateManifest.errors));
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
   }
 });
