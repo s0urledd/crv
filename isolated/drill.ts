@@ -71,6 +71,23 @@ async function environmentStep<T>(label: string, action: () => Promise<T>): Prom
   }
 }
 
+function elapsedMilliseconds(startedAt: bigint): number {
+  return Number((process.hrtime.bigint() - startedAt) / 1_000_000n);
+}
+
+async function timedPhase<T>(
+  details: string[],
+  name: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  const startedAt = process.hrtime.bigint();
+  try {
+    return await action();
+  } finally {
+    details.push(`timing.${name}Ms=${elapsedMilliseconds(startedAt)}`);
+  }
+}
+
 async function executeDrill(
   set: BackupSetInspection,
   config: CrvConfig | null,
@@ -79,6 +96,7 @@ async function executeDrill(
 ): Promise<{ participantId: string | null; participantDatabase: string; error: Error | null; failureKind: "backup" | "environment" | null }> {
   const resources = new DrillResources();
   const details = report.structuralRestore.details;
+  const totalStartedAt = process.hrtime.bigint();
   let sqlRestored: boolean | null = null;
   let participantContainerHealthy: boolean | null = null;
   let networkIsolated: boolean | null = null;
@@ -101,69 +119,82 @@ async function executeDrill(
     networkIsolated = internal.stdout.trim() === "true";
     if (!networkIsolated) throw new DrillEnvironmentError("disposable Docker network is not internal");
 
-    await environmentStep("PostgreSQL drill container startup failed", async () => {
-      await runProcess("docker", [
-      "run", "-d", "--name", resources.postgres, "--network", resources.network, "--network-alias", "postgres",
-      "--label", `crv.run=${resources.id}`, "-v", `${resources.volume}:/var/lib/postgresql/data`,
-      "-e", "POSTGRES_USER=postgres", "-e", `POSTGRES_PASSWORD=${password}`,
-      "--health-cmd=pg_isready -U postgres", "--health-interval=1s", "--health-timeout=3s", "--health-retries=60",
-      runtime.postgresImage,
-    ]);
-      await resources.waitHealthy(resources.postgres, 90);
+    await timedPhase(details, "imagePull", () =>
+      environmentStep("Drill image pull failed", async () => {
+        await Promise.all([
+          runProcess("docker", ["pull", runtime.postgresImage]),
+          runProcess("docker", ["pull", runtime.participantImage]),
+        ]);
+      }));
+
+    await timedPhase(details, "postgresStartup", () =>
+      environmentStep("PostgreSQL drill container startup failed", async () => {
+        await runProcess("docker", [
+          "run", "-d", "--name", resources.postgres, "--network", resources.network, "--network-alias", "postgres",
+          "--label", `crv.run=${resources.id}`, "-v", `${resources.volume}:/var/lib/postgresql/data`,
+          "-e", "POSTGRES_USER=postgres", "-e", `POSTGRES_PASSWORD=${password}`,
+          "--health-cmd=pg_isready -U postgres", "--health-interval=1s", "--health-timeout=3s", "--health-retries=60",
+          runtime.postgresImage,
+        ]);
+        await resources.waitHealthy(resources.postgres, 90);
+      }));
+
+    await timedPhase(details, "sqlRestore", async () => {
+      const cluster = set.artifacts.filter((artifact) => artifact.format === "cluster_dump");
+      const databaseArtifacts = set.artifacts.filter((artifact) => {
+        const roles = artifactRoles(set, artifact);
+        return artifact.format !== "cluster_dump" && (roles.includes("participant") || roles.includes("validator"));
+      });
+      if (cluster.length > 0 && databaseArtifacts.length > 0) throw new UnsupportedInputError("crv drill refuses a mixed cluster/per-database set");
+      if (cluster.length > 1) throw new UnsupportedInputError("crv drill requires exactly one selected pg_dumpall artifact");
+      sqlRestored = false;
+
+      participantDatabase = databaseName(
+        config?.deployment.participantDatabase ?? set.manifest?.declared.participantDatabase ?? null,
+        "participant",
+      );
+      const validatorDatabase = config?.deployment.validatorDatabase ?? set.manifest?.declared.validatorDatabase ?? null;
+
+      if (cluster.length === 1) {
+        const artifact = cluster[0];
+        if (!artifact) throw new Error("cluster artifact selection failed");
+        await restoreArtifact(resources, set, artifact, "postgres");
+      } else {
+        const participants = databaseArtifacts.filter((artifact) => artifactRoles(set, artifact).includes("participant"));
+        const validators = databaseArtifacts.filter((artifact) => artifactRoles(set, artifact).includes("validator"));
+        if (participants.length !== 1 || validators.length !== 1) {
+          throw new UnsupportedInputError("crv drill requires exactly one participant and one validator database artifact");
+        }
+        const selectedValidatorDatabase = databaseName(validatorDatabase, "validator");
+        await runProcess("docker", ["exec", resources.postgres, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", "CREATE ROLE cnadmin"]);
+        for (const database of [selectedValidatorDatabase, participantDatabase]) {
+          await runProcess("docker", ["exec", resources.postgres, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", `CREATE DATABASE ${quotedIdentifier(database)}`]);
+        }
+        const validator = validators[0];
+        const participant = participants[0];
+        if (!validator || !participant) throw new Error("database artifact selection failed");
+        await restoreArtifact(resources, set, validator, selectedValidatorDatabase);
+        await restoreArtifact(resources, set, participant, participantDatabase);
+      }
+      sqlRestored = true;
     });
 
-    const cluster = set.artifacts.filter((artifact) => artifact.format === "cluster_dump");
-    const databaseArtifacts = set.artifacts.filter((artifact) => {
-      const roles = artifactRoles(set, artifact);
-      return artifact.format !== "cluster_dump" && (roles.includes("participant") || roles.includes("validator"));
+    await timedPhase(details, "participantStartup", async () => {
+      await environmentStep("Participant drill container launch failed", () => runProcess("docker", [
+        "run", "-d", "--name", resources.participant, "--network", resources.network,
+        "--label", `crv.run=${resources.id}`,
+        "-e", "CANTON_PARTICIPANT_POSTGRES_SERVER=postgres", "-e", "CANTON_PARTICIPANT_POSTGRES_PORT=5432",
+        "-e", `CANTON_PARTICIPANT_POSTGRES_DB=${participantDatabase}`, "-e", "CANTON_PARTICIPANT_POSTGRES_SCHEMA=participant",
+        "-e", "CANTON_PARTICIPANT_POSTGRES_USER=postgres", "-e", `CANTON_PARTICIPANT_POSTGRES_PASSWORD=${password}`,
+        "-e", "AUTH_JWKS_URL=http://127.0.0.1:1", "-e", "AUTH_TARGET_AUDIENCE=https://canton.network.global",
+        "-e", "CANTON_PARTICIPANT_ADMIN_USER_NAME=ledger-api-user",
+        "-e", "ADDITIONAL_CONFIG_LEDGER_AUTH=canton.participants.participant.ledger-api.auth-services=[]",
+        runtime.participantImage,
+      ]));
+      participantContainerHealthy = false;
+      await resources.waitHealthy(resources.participant, compatibility.runtime.participantStartupTimeoutSeconds);
+      participantContainerHealthy = true;
     });
-    if (cluster.length > 0 && databaseArtifacts.length > 0) throw new UnsupportedInputError("crv drill refuses a mixed cluster/per-database set");
-    if (cluster.length > 1) throw new UnsupportedInputError("crv drill requires exactly one selected pg_dumpall artifact");
-    sqlRestored = false;
-
-    participantDatabase = databaseName(
-      config?.deployment.participantDatabase ?? set.manifest?.declared.participantDatabase ?? null,
-      "participant",
-    );
-    const validatorDatabase = config?.deployment.validatorDatabase ?? set.manifest?.declared.validatorDatabase ?? null;
-
-    if (cluster.length === 1) {
-      const artifact = cluster[0];
-      if (!artifact) throw new Error("cluster artifact selection failed");
-      await restoreArtifact(resources, set, artifact, "postgres");
-    } else {
-      const participants = databaseArtifacts.filter((artifact) => artifactRoles(set, artifact).includes("participant"));
-      const validators = databaseArtifacts.filter((artifact) => artifactRoles(set, artifact).includes("validator"));
-      if (participants.length !== 1 || validators.length !== 1) {
-        throw new UnsupportedInputError("crv drill requires exactly one participant and one validator database artifact");
-      }
-      const selectedValidatorDatabase = databaseName(validatorDatabase, "validator");
-      await runProcess("docker", ["exec", resources.postgres, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", "CREATE ROLE cnadmin"]);
-      for (const database of [selectedValidatorDatabase, participantDatabase]) {
-        await runProcess("docker", ["exec", resources.postgres, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", `CREATE DATABASE ${quotedIdentifier(database)}`]);
-      }
-      const validator = validators[0];
-      const participant = participants[0];
-      if (!validator || !participant) throw new Error("database artifact selection failed");
-      await restoreArtifact(resources, set, validator, selectedValidatorDatabase);
-      await restoreArtifact(resources, set, participant, participantDatabase);
-    }
-    sqlRestored = true;
-
-    await environmentStep("Participant drill container launch failed", () => runProcess("docker", [
-      "run", "-d", "--name", resources.participant, "--network", resources.network,
-      "--label", `crv.run=${resources.id}`,
-      "-e", "CANTON_PARTICIPANT_POSTGRES_SERVER=postgres", "-e", "CANTON_PARTICIPANT_POSTGRES_PORT=5432",
-      "-e", `CANTON_PARTICIPANT_POSTGRES_DB=${participantDatabase}`, "-e", "CANTON_PARTICIPANT_POSTGRES_SCHEMA=participant",
-      "-e", "CANTON_PARTICIPANT_POSTGRES_USER=postgres", "-e", `CANTON_PARTICIPANT_POSTGRES_PASSWORD=${password}`,
-      "-e", "AUTH_JWKS_URL=http://127.0.0.1:1", "-e", "AUTH_TARGET_AUDIENCE=https://canton.network.global",
-      "-e", "CANTON_PARTICIPANT_ADMIN_USER_NAME=ledger-api-user",
-      "-e", "ADDITIONAL_CONFIG_LEDGER_AUTH=canton.participants.participant.ledger-api.auth-services=[]",
-      runtime.participantImage,
-    ]));
-    participantContainerHealthy = false;
-    await resources.waitHealthy(resources.participant, compatibility.runtime.participantStartupTimeoutSeconds);
-    participantContainerHealthy = true;
 
     const identity = await runProcess("docker", [
       "exec", resources.postgres, "psql", "-U", "postgres", "-d", participantDatabase, "-Atc",
@@ -194,6 +225,7 @@ async function executeDrill(
         : "drill cleanup could not be verified because Docker probes failed");
       failureKind = "environment";
     }
+    details.push(`timing.totalMs=${elapsedMilliseconds(totalStartedAt)}`);
   }
   return { participantId, participantDatabase, error: failure, failureKind };
 }
