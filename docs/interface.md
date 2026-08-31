@@ -92,8 +92,14 @@ was the live deployment's effective database name.
 `crv init-config [path]` writes a commented, runnable `crv.yaml` and refuses to
 overwrite an existing file. Pass it with `--config <path>`. A horizon has no
 evidentiary value without `sequencerHorizonSource`; an LSU usability assertion
-likewise requires its source. `network.scanVersionUrl` is optional; when absent,
-verification stays offline. When configured, an unavailable or malformed public
+likewise requires its source. An optional `network.backupAgeWarnFraction` must
+be greater than 0 and less than 1. When configured, an age strictly above that
+fraction of the sourced horizon is `WARN`, so otherwise-complete preconditions
+become `AT_RISK` and exit 1. Equality remains `PASS`; null disables the warning
+and crv assumes no threshold.
+
+`network.scanVersionUrl` is optional; when absent, verification stays offline.
+When configured, an unavailable or malformed public
 Scan version response is informational `UNKNOWN` and never changes a check
 verdict. Watch state defaults to `.crv/state.json` and reports to `crv-reports`,
 both outside backup artifacts.

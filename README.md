@@ -4,6 +4,36 @@
 It emits one evidence-backed verdict, an exit code, and a stable JSON report without changing backup artifacts.
 `crv drill` separately proves that a selected set restores to a network-isolated participant with its identity intact.
 
+## What operators caught
+
+A MainNet operator first discovered that the existing backup cron captured the
+validator app database but not the participant database. Fast verification
+reported the incomplete recovery path before a restore was attempted. The
+pre-fix report contained operator-local paths and was not published; the first
+[post-fix drill record](docs/raw/v0.1-mainnet-drill-0.6.11.json) contains both
+database halves.
+
+The operator then deliberately reversed capture order. PostgreSQL accepted the
+dumps, but `crv verify` found validator offset `3691235` ahead of participant
+ledger end `3691183` and returned `FAILED`. The
+[unedited report](docs/raw/v0.1-mainnet-verify-misordered-0.6.11.json) records
+that detection.
+
+The first production drill also exposed a false negative in crv's restored
+identity lookup. The query was corrected and the next
+[operator drill](docs/raw/v0.1-mainnet-drill-0.6.11.json) recorded structural
+`PASSED` with identity equality and verified cleanup. Supplying current Scan
+synchronizer evidence then produced
+[six applicable checks at MET](docs/raw/v0.1-mainnet-drill-met-0.6.11.json).
+A fresh identities export made the final structural check applicable; the
+[7/7 record](docs/raw/v0.1-mainnet-drill-full-met-0.6.11.json) has seven
+`PASS`, no `UNKNOWN`, and structural `PASSED`.
+
+`MET` means every applicable shipped recovery precondition had evidence and
+passed. Structural `PASSED` means the artifacts restored offline with the
+expected participant identity. Neither verdict means `RECOVERABLE`, proves
+synchronizer catch-up, or promises complete recovery success.
+
 ## Install
 
 Requires Node 22. Fast inspection of custom archives also requires a compatible
@@ -86,7 +116,7 @@ They are not comparable benchmarks.
 | `artifact.reference_digest` | Proven invariant | Current bytes and sizes equal capture-time manifest references. |
 | `backup.offset_order` | Proven invariant | Validator last-ingested offset does not exceed participant ledger end. |
 | `deployment.selected_identity` | Proven invariant | After an offline drill, the selected DB contains the expected participant identity. |
-| `backup.latest_age` | Recovery prerequisite | Capture age is below an explicitly sourced sequencer horizon. No 30-day constant is assumed. |
+| `backup.latest_age` | Recovery prerequisite | Capture age is below an explicitly sourced sequencer horizon. An optional configured fraction warns before expiry; no threshold is assumed. |
 | `network.lsu_path` | Recovery prerequisite | A pre-LSU set has sourced evidence for a usable old physical synchronizer path. |
 | `identities.structure` | Structural validation | The export has required JSON fields, canonical participant ID, strict base64, and required key names. Key bytes are never reported. |
 | Offline restore | Structural validation | SQL restores, the participant image healthcheck passes, identity matches, the network is internal, and cleanup is verified absent. |
@@ -105,8 +135,8 @@ would otherwise be ambiguous.
 
 Fast D2 inspection binds to exact schema shapes recorded in `compatibility.json`;
 a release number never selects an adapter. The disposable drill requires one exact
-artifact version. LocalNet drill evidence currently records 0.6.9, 0.6.11, and
-0.6.14. Recorded versions use a tested pinned digest; unrecorded versions
+artifact version. LocalNet drill evidence currently records 0.6.9, 0.6.11,
+0.6.14, and 0.7.5. Recorded versions use a tested pinned digest; unrecorded versions
 resolve and run an immutable image digest and report
 `PASSED_UNVERIFIED_VERSION` after the same assertions pass. See
 [`docs/version-policy.md`](docs/version-policy.md) and
@@ -141,5 +171,12 @@ Do not translate `MET` or structural `PASSED` into `RECOVERABLE`.
 
 Read the evidence in [`docs/discovery.md`](docs/discovery.md) and reproduce the
 CLI drill with [`experiments/08-cli-drill.sh`](experiments/08-cli-drill.sh).
+
+## Maintenance
+
+crv is maintained by the operators of a Canton Network MainNet validator.
+Engineering is AI-assisted; every change is human-reviewed, and behavior
+claims are validated on production infrastructure before release. Files under
+`docs/raw/` are unedited records of real runs.
 
 License: MIT.

@@ -146,3 +146,49 @@ manifest and correctly block `crv drill` as conflicting version evidence.
 The endpoint and sensitivity warning are documented in the pinned
 [validator backup guide](https://github.com/hyperledger-labs/splice/blob/0.6.11/docs/src/validator_operator/validator_backups.rst); the client-credentials example is in the pinned
 [Keycloak compose guide](https://github.com/hyperledger-labs/splice/blob/0.6.11/docs/src/community/keycloak-docker-canton-validator-config.rst).
+
+## Run watch under systemd
+
+Point `watch` at a stable path that the existing backup process updates to the
+freshest complete set. crv does not update that path or take the backup. Use
+absolute state and report paths when service working directories may vary:
+
+```yaml
+watch:
+  statePath: /var/lib/crv/state.json
+  reportsPath: /var/lib/crv/reports
+  intervalSeconds: 21600
+```
+
+Install the built CLI, then run one long-lived process:
+
+```ini
+[Unit]
+Description=Verify the freshest Canton validator backup set
+
+[Service]
+Type=simple
+User=validator-backup
+ExecStart=/usr/local/bin/crv watch /backups/validator/latest --config /etc/crv/crv.yaml
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save the unit as `crv-watch.service`, then enable it with the host's normal
+systemd deployment process.
+
+`watch` verifies immediately. While the verdict is `MET`, the same process
+waits `intervalSeconds` and verifies the input path again. Do not also launch it
+from recurring cron: successful runs remain alive. On every cycle it writes a
+schema 1.2 JSON report under `reportsPath` and atomically replaces `statePath`;
+relative paths resolve from the config directory.
+
+A non-MET result is persisted before the process exits: `AT_RISK` exits 1,
+`FAILED` exits 2, and `INDETERMINATE` exits 3. Invalid input/config exits 65;
+internal or execution failure exits 70. Alert on the failed systemd unit or
+those exit codes with the operator's existing tooling. A worsening from the
+stored verdict is also printed to stderr as a regression. After remediation,
+restart the unit; corrupt or mismatched state is rejected rather than silently
+replaced.
