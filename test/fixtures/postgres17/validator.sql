@@ -56,4 +56,3 @@ COPY validator.store_last_ingested_offsets (store_id, migration_id, last_ingeste
 --
 
 \unrestrict QDcItwWjV8JPUAN5zC1Bbz4GoDnHsEoSIEHQQwpIhlZRpCrAjK9uQbMpp3P6zMw
-

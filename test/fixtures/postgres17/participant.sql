@@ -58,4 +58,3 @@ COPY participant.lapi_parameters (ledger_end, participant_id, participant_pruned
 --
 
 \unrestrict VrygSPnIXlucUh4fIxebA0LtcUKvwwy4uoyNC3dZB6E8GHSo5xlKT13ZuTKGaMk
-
