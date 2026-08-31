@@ -1,8 +1,10 @@
 # v0.1 command and report contract
 
-The v0.1 machine interface is JSON report schema `1.1`. Consumers must select
+The v0.1 machine interface is JSON report schema `1.2`. Consumers must select
 on `schemaVersion`, not the package version. The normative schema is
-[`report-schema-v1.1.json`](report-schema-v1.1.json).
+[`report-schema-v1.2.json`](report-schema-v1.2.json). Reports with
+`schemaVersion` 1.1 validate against `report-schema-v1.1.json`; 1.2 is the
+current contract.
 
 `verify` is the fast, read-only path. It inspects artifacts and provenance but
 does not start containers or compute a digest unless a reference digest must be
@@ -73,6 +75,10 @@ is [`manifest-schema-v1.json`](manifest-schema-v1.json). Artifact paths are
 portable and relative to the manifest directory. Refresh preserves declared
 provenance, recomputes artifact size/digest references, and never derives a
 capture timestamp from mtime.
+
+Manifests written by current crv binaries may include the additive `database`
+role and are rejected by older crv binaries; the manifest schema remains 1.0
+because readers of this version can accept the additive role.
 
 `crv init-config [path]` writes a commented, runnable `crv.yaml` and refuses to
 overwrite an existing file. Pass it with `--config <path>`. A horizon has no

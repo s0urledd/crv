@@ -1,4 +1,4 @@
-export const REPORT_SCHEMA_VERSION = "1.1" as const;
+export const REPORT_SCHEMA_VERSION = "1.2" as const;
 
 export type EvidenceClass =
   | "proven_invariant"

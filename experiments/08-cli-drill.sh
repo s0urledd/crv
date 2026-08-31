@@ -4,7 +4,9 @@ source "$(dirname "$0")/lib/bench.sh"
 
 start_bench
 work=$(mktemp -d)
+temporary_report=
 cleanup() {
+  [[ -z "$temporary_report" ]] || rm -f -- "$temporary_report"
   rm -rf -- "$work"
 }
 trap cleanup EXIT
@@ -27,18 +29,24 @@ jq --arg expected "$expected" --arg splice_version "$CRV_IMAGE_TAG" \
   "$work/crv-manifest.json" >"$work/crv-manifest.next"
 mv "$work/crv-manifest.next" "$work/crv-manifest.json"
 
-set +e
 if [[ -n "${CRV_DRILL_REPORT_PATH:-}" ]]; then
-  node dist/cli.js drill "$work" --json >"$CRV_DRILL_REPORT_PATH"
+  report=$CRV_DRILL_REPORT_PATH
 else
-  node dist/cli.js drill "$work"
+  temporary_report=$(mktemp)
+  report=$temporary_report
 fi
+set +e
+node dist/cli.js drill "$work" --json >"$report"
 status=$?
 set -e
 if [[ "$status" -ne 3 ]]; then
   echo "expected INDETERMINATE precondition exit 3 after a PASSED structural drill; received $status" >&2
   exit 1
 fi
+node --input-type=module -e 'import { readFileSync } from "node:fs"; import { formatReport } from "./dist/report/human.js"; console.log(formatReport(JSON.parse(readFileSync(process.argv[1], "utf8"))))' "$report"
+for phase in imagePull postgresStartup sqlRestore participantStartup total; do
+  jq -e --arg prefix "timing.${phase}Ms=" 'any(.structuralRestore.details[]; startswith($prefix) and (ltrimstr($prefix) | test("^[0-9]+$")))' "$report" >/dev/null
+done
 
 sha256sum -c "$work/before.sha256" >/dev/null
 leftovers=$(docker ps -a --filter 'label=crv.run' --format '{{.Names}}')
