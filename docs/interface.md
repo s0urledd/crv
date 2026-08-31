@@ -98,6 +98,10 @@ Scan version response is informational `UNKNOWN` and never changes a check
 verdict. Watch state defaults to `.crv/state.json` and reports to `crv-reports`,
 both outside backup artifacts.
 
+See [Operator evidence inputs](operator-guide.md) for pinned, read-only compose
+and Scan commands that populate synchronizer fields, plus provider-neutral
+identities refresh guidance.
+
 ## Drill runtime boundary
 
 Fast inspection enables D2 only for an exact schema family recorded in
@@ -107,7 +111,13 @@ digest and may report `PASSED`. Unrecorded versions pull the exact tag, resolve
 and run one immutable digest, and may report `PASSED_UNVERIFIED_VERSION`. Pull or
 digest-resolution failure reports `ENVIRONMENT_ERROR` while fast `verify` remains
 available. Both passing statuses require SQL restore, participant container
-healthcheck success, selected-DB identity equality, network isolation, and verified cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
+healthcheck success, selected-DB identity equality, network isolation, and
+verified cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
+
+Fast inspection accepts PostgreSQL 17 logical dumps. The isolated runtime
+remains pinned to PostgreSQL 14 and refuses a PostgreSQL 17 drill with both
+observed and pinned majors plus the official migration guide; no PG17 structural
+claim is made without runtime evidence.
 
 ## Watch state
 

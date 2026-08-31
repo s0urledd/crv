@@ -8,16 +8,20 @@ command -v git >/dev/null
 command -v jq >/dev/null
 command -v sha256sum >/dev/null
 
-latest=${1:-}
-if [[ -z "$latest" ]]; then
-  latest=$(git ls-remote --tags --refs https://github.com/canton-network/splice.git 'refs/tags/0.6.*' |
-    awk -F/ '{print $3}' |
-    grep -E '^0\.6\.[0-9]+$' |
-    sort -V |
-    tail -1)
+npm run build >/dev/null
+newest=$(git ls-remote --tags --refs https://github.com/hyperledger-labs/splice.git |
+  awk -F/ '{print $3}' |
+  grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' |
+  sort -V |
+  tail -1)
+if [[ ! "$newest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "could not select the newest Splice release tag" >&2
+  exit 2
 fi
-if [[ ! "$latest" =~ ^0\.6\.[0-9]+$ ]]; then
-  echo "could not select one 0.6.x Splice tag" >&2
+echo "newest Splice tag seen: $newest"
+latest=${1:-$newest}
+if [[ ! "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "requested version is not an exact Splice release tag: $latest" >&2
   exit 2
 fi
 recorded=false
@@ -25,13 +29,17 @@ if jq -e --arg version "$latest" '.runtime.drillEvidence[$version] != null' comp
   recorded=true
 fi
 
-schema_url="https://raw.githubusercontent.com/canton-network/splice/$latest/apps/common/src/main/resources/db/migration/canton-network/postgres/stable/V001__create_schema.sql"
-schema_hash=$(curl -fsSL "$schema_url" | sha256sum | awk '{print $1}')
-if ! jq -e --arg hash "$schema_hash" '.schemaFamilies | any(.sourceDefinitionSha256 == $hash)' compatibility.json >/dev/null; then
-  echo "Splice $latest has an unrecognized V001 schema definition hash: $schema_hash" >&2
-  exit 1
+schema_path="apps/common/src/main/resources/db/migration/canton-network/postgres/stable/V001__create_schema.sql"
+schema_url="https://raw.githubusercontent.com/hyperledger-labs/splice/$latest/$schema_path"
+schema_file=$(mktemp)
+if ! curl -fsSL "$schema_url" >"$schema_file"; then
+  rm -f -- "$schema_file"
+  node dist/compatibility-watch-cli.js "$latest" "$schema_path" unfetchable
+  exit $?
 fi
-
+schema_hash=$(sha256sum "$schema_file" | awk '{print $1}')
+rm -f -- "$schema_file"
+node dist/compatibility-watch-cli.js "$latest" "$schema_path" "$schema_hash"
 report=${CRV_DRILL_REPORT_PATH:-}
 temporary_report=false
 if [[ -z "$report" ]]; then

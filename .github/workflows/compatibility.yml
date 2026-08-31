@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Exact 0.6.x Splice tag; blank selects the newest tag
+        description: Exact Splice release tag; blank selects the newest tag
         required: false
         type: string
 

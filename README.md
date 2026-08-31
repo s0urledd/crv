@@ -29,17 +29,12 @@ in `docs/raw/v0.1-drill.txt`. PostgreSQL restore still succeeds, but the
 intrinsic offset invariant fails:
 
 ```text
-$ crv verify test/fixtures/reversed
-Recovery preconditions: FAILED
-Offline structural restore: NOT_RUN
-Backup Splice version: UNKNOWN (UNKNOWN)
-Network Splice version: UNKNOWN (UNKNOWN)
-
-STATUS  CHECK                CLASS             RESULT
-FAIL    backup.offset_order  proven invariant  Validator offset 66 exceeds participant ledger end 65.
-
-This verdict does not prove synchronizer catch-up or complete recovery success.
+$ crv verify test/fixtures/reversed --json | jq -r '.preconditions.verdict, (.checks[] | select(.id == "backup.offset_order") | "\(.status) \(.summary)")'
+FAILED
+FAIL Validator offset 66 exceeds participant ledger end 65.
 ```
+
+The `crv` process exits 2; the pipeline above is only a compact transcript.
 
 Use JSON for automation:
 
@@ -74,6 +69,9 @@ The command never derives capture time from mtime. Missing declared values make
 only dependent checks `UNKNOWN`. Configure `network.scanVersionUrl` only when
 you want the public Scan `/api/scan/version` reported beside the backup version;
 the default remains offline and Scan failure never fails a backup check.
+See [`docs/operator-guide.md`](docs/operator-guide.md) for read-only LSU evidence
+commands and safe periodic identities-export guidance.
+
 
 Timing scope matters: 23.7 seconds measured only a warm `crv drill` after
 artifact capture with images cached. The 6m12s GitHub CI job included checkout,
@@ -113,6 +111,10 @@ resolve and run an immutable image digest and report
 `PASSED_UNVERIFIED_VERSION` after the same assertions pass. See
 [`docs/version-policy.md`](docs/version-policy.md) and
 [`docs/version-matrix.md`](docs/version-matrix.md).
+
+Fast `verify` accepts PostgreSQL 17 logical dumps. The isolated drill remains
+pinned to PostgreSQL 14 and rejects PG17 with the official migration-guide URL
+until repeatable PG17 participant-runtime evidence exists.
 
 ## Non-goals
 

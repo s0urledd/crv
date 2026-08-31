@@ -278,11 +278,18 @@ export async function drill(input: string, configPath?: string, now = new Date()
     report.structuralRestore.details.push("environmentError=" + sanitizeDrillError(error));
     return report;
   }
-  const postgresPattern = new RegExp(`^${runtime.postgresMajor}(?:\\.|\\s|$)`);
   const unsupportedPostgres = databaseArtifacts
-    .map((artifact) => artifact.postgresSourceVersion as string)
-    .find((version) => !postgresPattern.test(version));
-  if (unsupportedPostgres) throw new UnsupportedInputError(`isolated runtime drill supports PostgreSQL ${runtime.postgresMajor} artifacts; received ${unsupportedPostgres}`);
+    .map((artifact) => ({
+      path: artifact.path,
+      version: artifact.postgresSourceVersion as string,
+      major: (artifact.postgresSourceVersion as string).match(/^([0-9]+)/)?.[1] ?? "unparseable",
+    }))
+    .find((artifact) => artifact.major !== String(runtime.postgresMajor));
+  if (unsupportedPostgres) {
+    throw new UnsupportedInputError(
+      `crv drill runtime is pinned to PostgreSQL major ${runtime.postgresMajor}; ${unsupportedPostgres.path} reports PostgreSQL major ${unsupportedPostgres.major} (${unsupportedPostgres.version}). See https://docs.canton.network/global-synchronizer/production-operations/validator-postgres-migration`,
+    );
+  }
 
   report.structuralRestore.runtime = {
     spliceVersion: runtime.spliceVersion,

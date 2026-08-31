@@ -1,0 +1,298 @@
+{
+  "schemaVersion": "1.2",
+  "tool": {
+    "name": "crv",
+    "version": "0.1.0-beta.0"
+  },
+  "generatedAt": "2026-08-31T07:28:25.514Z",
+  "subject": {
+    "input": "set",
+    "manifest": "/root/crv-test/set/crv-manifest.json",
+    "layout": "per_database"
+  },
+  "preconditions": {
+    "verdict": "FAILED",
+    "pass": 4,
+    "fail": 1,
+    "warn": 0,
+    "unknown": 2
+  },
+  "versions": {
+    "backup": {
+      "status": "UNKNOWN",
+      "value": null,
+      "source": "artifact:identities_20260429_165550.json, manifest.declared.spliceVersion",
+      "commitTs": null,
+      "detail": "Conflicting backup-set versions: 0.5.18, 0.6.9."
+    },
+    "network": {
+      "status": "UNKNOWN",
+      "value": null,
+      "source": null,
+      "commitTs": null,
+      "detail": "No Scan version endpoint is configured; verification remained offline."
+    }
+  },
+  "structuralRestore": {
+    "status": "NOT_RUN",
+    "sqlRestored": null,
+    "participantContainerHealthy": null,
+    "identityMatched": null,
+    "networkIsolated": null,
+    "cleanupStatus": "NOT_RUN",
+    "runtime": {
+      "spliceVersion": null,
+      "participantImage": null,
+      "versionEvidence": null,
+      "testedAt": null,
+      "evidence": null
+    },
+    "details": []
+  },
+  "artifacts": [
+    {
+      "path": "db_20260831_072628.sql.gz",
+      "format": "plain_dump",
+      "compression": "gzip",
+      "roles": [
+        "database",
+        "validator"
+      ],
+      "sizeBytes": 3036396,
+      "sha256": "e6a9d907c9b48ecf7ea67aa60a1096271132d67a101ae3a3e905edee05a363c3",
+      "sourceDatabase": null,
+      "databases": [],
+      "postgresSourceVersion": "14.23 (Debian 14.23-1.pgdg13+1)",
+      "postgresDumperVersion": "14.23 (Debian 14.23-1.pgdg13+1)",
+      "archiveCreatedAt": null,
+      "spliceVersion": null,
+      "participantId": null,
+      "identityStructureValid": null,
+      "schemaFamilies": [
+        "splice-d2-offset-v1"
+      ],
+      "unrecognizedOffsetTables": [],
+      "offsets": [
+        {
+          "database": null,
+          "validatorLastIngested": "3691235",
+          "validatorMigrationId": "4"
+        }
+      ],
+      "limitations": [
+        "A per-database plain dump does not reliably contain its source database name or capture time."
+      ]
+    },
+    {
+      "path": "identities_20260429_165550.json",
+      "format": "identities_json",
+      "compression": "none",
+      "roles": [
+        "identities"
+      ],
+      "sizeBytes": 2208,
+      "sha256": "f1c108da692611f7d19913a1787a0aafbe401f52217409ed3324c2c6da3fc9aa",
+      "sourceDatabase": null,
+      "databases": [],
+      "postgresSourceVersion": null,
+      "postgresDumperVersion": null,
+      "archiveCreatedAt": null,
+      "spliceVersion": "0.5.18",
+      "participantId": "PAR::jubileemarkets-validator-1::122083160dd4450408fcda85e6e685865c403dd89a50a4f42041bcbd94d95a5cba6f",
+      "identityStructureValid": true,
+      "schemaFamilies": [],
+      "unrecognizedOffsetTables": [],
+      "offsets": [],
+      "limitations": [
+        "Party hint and successful re-onboarding are not intrinsic to this artifact."
+      ]
+    },
+    {
+      "path": "participant_db_20260831_071925.sql.gz",
+      "format": "plain_dump",
+      "compression": "gzip",
+      "roles": [
+        "database",
+        "participant"
+      ],
+      "sizeBytes": 3534960344,
+      "sha256": "63b2d662a3180e6122c12738cc0c1d8d9bb7c06572326200c7740702e5fd1b68",
+      "sourceDatabase": null,
+      "databases": [],
+      "postgresSourceVersion": "14.23 (Debian 14.23-1.pgdg13+1)",
+      "postgresDumperVersion": "14.23 (Debian 14.23-1.pgdg13+1)",
+      "archiveCreatedAt": null,
+      "spliceVersion": null,
+      "participantId": null,
+      "identityStructureValid": null,
+      "schemaFamilies": [
+        "splice-d2-offset-v1"
+      ],
+      "unrecognizedOffsetTables": [],
+      "offsets": [
+        {
+          "database": null,
+          "participantLedgerEnd": "3691183"
+        }
+      ],
+      "limitations": [
+        "A per-database plain dump does not reliably contain its source database name or capture time."
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "id": "backup.required_path",
+      "severity": "error",
+      "evidenceClass": "proven_invariant",
+      "title": "A database pair or identities fallback exists",
+      "proves": "The set contains at least one artifact path documented for recovery.",
+      "method": "Find both participant and validator database evidence, or a structurally recognized identities export.",
+      "remediation": "Provide the missing participant/validator dump or a validator identities export.",
+      "applicable": true,
+      "status": "PASS",
+      "summary": "Participant and validator database evidence are present.",
+      "evidence": {
+        "databasePair": true,
+        "databaseArtifacts": [
+          "db_20260831_072628.sql.gz",
+          "participant_db_20260831_071925.sql.gz"
+        ],
+        "identitiesFallback": true
+      },
+      "requiredEvidence": []
+    },
+    {
+      "id": "identities.structure",
+      "severity": "error",
+      "evidenceClass": "structural_validation",
+      "title": "Identities export has the required offline structure",
+      "proves": "The export is parseable and contains a participant ID, version, topology snapshot, and required base64 key pairs.",
+      "method": "Validate JSON types, canonical participant ID prefix, strict base64, and namespace/signing/encryption key names without exposing key bytes.",
+      "remediation": "Replace the invalid export with a newly captured identities backup; never edit key material by hand.",
+      "applicable": true,
+      "status": "PASS",
+      "summary": "1 identities export(s) passed structural validation.",
+      "evidence": {
+        "inspected": 1,
+        "invalid": [],
+        "keyMaterialReported": false
+      },
+      "requiredEvidence": []
+    },
+    {
+      "id": "artifact.reference_digest",
+      "severity": "error",
+      "evidenceClass": "proven_invariant",
+      "title": "Artifact bytes match a capture-time reference",
+      "proves": "The artifact has not changed since the trusted reference digest was recorded.",
+      "method": "Compute SHA-256 only for artifacts with a reference digest and compare exact bytes and sizes.",
+      "remediation": "Replace changed/missing artifacts from trusted storage, or capture and manifest a new complete set.",
+      "applicable": true,
+      "status": "PASS",
+      "summary": "3 artifact(s) match capture-time size and SHA-256 references.",
+      "evidence": {
+        "referencedArtifacts": 3,
+        "missingArtifacts": [],
+        "mismatches": []
+      },
+      "requiredEvidence": []
+    },
+    {
+      "id": "backup.offset_order",
+      "severity": "error",
+      "evidenceClass": "proven_invariant",
+      "title": "Validator offset does not exceed participant ledger end",
+      "proves": "Validator state does not intrinsically reference a Ledger API offset absent from the participant artifact.",
+      "method": "Compare validator.store_last_ingested_offsets for the latest captured migration with participant.lapi_parameters.ledger_end.",
+      "remediation": "Discard the inconsistent pair and use a participant backup captured after the validator backup.",
+      "applicable": true,
+      "status": "FAIL",
+      "summary": "Validator offset 3691235 exceeds participant ledger end 3691183.",
+      "evidence": {
+        "participant": {
+          "artifact": "participant_db_20260831_071925.sql.gz",
+          "database": null,
+          "value": "3691183"
+        },
+        "validator": {
+          "artifact": "db_20260831_072628.sql.gz",
+          "database": null,
+          "value": "3691235",
+          "migrationId": "4"
+        },
+        "relation": ">",
+        "selectedParticipantDatabase": "participant-4",
+        "selectedValidatorDatabase": "validator"
+      },
+      "requiredEvidence": []
+    },
+    {
+      "id": "backup.latest_age",
+      "severity": "error",
+      "evidenceClass": "recovery_prerequisite",
+      "title": "Latest participant state is inside a sourced sequencer horizon",
+      "proves": "The captured participant state is not older than the supplied effective catch-up horizon.",
+      "method": "Compare trusted capture completion time with verification time using a sourced horizon; never infer completion from file mtime.",
+      "remediation": "Supply capture completion and a versioned documentation-policy or network-operator horizon, or take a new backup.",
+      "applicable": true,
+      "status": "PASS",
+      "summary": "Backup age 36s is below the sourced 2592000s sequencer horizon.",
+      "evidence": {
+        "captureCompletedAt": "2026-08-31T07:27:49Z",
+        "verificationTime": "2026-08-31T07:28:25.514Z",
+        "ageSeconds": 36.514,
+        "horizonSeconds": 2592000,
+        "horizonSource": "MainNet global synchronizer 30d pruning window (operator-declared)"
+      },
+      "requiredEvidence": []
+    },
+    {
+      "id": "deployment.selected_identity",
+      "severity": "error",
+      "evidenceClass": "proven_invariant",
+      "title": "Selected participant database contains the expected identity",
+      "proves": "The database selected by the deployment is the database carrying the backup set's expected participant identity.",
+      "method": "Read identity from the selected restored database and compare it with trusted set or identities-export evidence.",
+      "remediation": "Supply the effective participant database and expected participant ID, then run crv drill.",
+      "applicable": true,
+      "status": "UNKNOWN",
+      "summary": "Fast verification cannot read participant identity from the selected database without an isolated restore.",
+      "evidence": {
+        "selectedDatabase": "participant-4",
+        "expectedParticipantId": "PAR::jubileemarkets-validator-1::122083160dd4450408fcda85e6e685865c403dd89a50a4f42041bcbd94d95a5cba6f",
+        "identitySources": [
+          {
+            "source": "artifact:identities_20260429_165550.json",
+            "value": "PAR::jubileemarkets-validator-1::122083160dd4450408fcda85e6e685865c403dd89a50a4f42041bcbd94d95a5cba6f"
+          }
+        ]
+      },
+      "requiredEvidence": [
+        "Run crv drill so CRV can read the participant ID from the selected restored database offline."
+      ]
+    },
+    {
+      "id": "network.lsu_path",
+      "severity": "error",
+      "evidenceClass": "recovery_prerequisite",
+      "title": "A cross-LSU backup still has a usable synchronizer path",
+      "proves": "If the backup predates a logical synchronizer upgrade, the captured physical synchronizer is known to remain usable for first restore.",
+      "method": "Compare captured and current physical synchronizer identity/serial, then evaluate trusted old-synchronizer usability evidence.",
+      "remediation": "Take a post-LSU backup or supply network-operator evidence that the captured physical synchronizer remains usable.",
+      "applicable": true,
+      "status": "UNKNOWN",
+      "summary": "Captured and current physical synchronizer identity were not both established.",
+      "evidence": {
+        "capturedId": null,
+        "capturedSerial": null,
+        "currentId": null,
+        "currentSerial": null
+      },
+      "requiredEvidence": [
+        "Supply the captured physical synchronizer ID and serial in the manifest.",
+        "Supply the current active physical synchronizer ID and serial from participant admin or Scan."
+      ]
+    }
+  ]
+}

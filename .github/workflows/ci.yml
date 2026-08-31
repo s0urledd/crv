@@ -46,10 +46,16 @@ jobs:
           test "$("$package_dir/node_modules/.bin/crv" --version)" = "0.1.0-beta.0"
 
   localnet-drill:
-    name: LocalNet isolated drill
+    name: LocalNet isolated drill ${{ matrix.splice-version }}
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        splice-version: ["0.6.9", "0.6.11", "0.6.14"]
+    env:
+      CRV_IMAGE_TAG: ${{ matrix.splice-version }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,7 +70,17 @@ jobs:
           sudo apt-get install -y --no-install-recommends jq ripgrep
           npm ci
       - name: Run isolated restore against LocalNet artifacts
-        run: ./experiments/08-cli-drill.sh
+        run: |
+          mkdir -p ci-evidence
+          CRV_DRILL_REPORT_PATH="ci-evidence/v0.1-ci-drill-${CRV_IMAGE_TAG}-schema-1.2.json" ./experiments/08-cli-drill.sh
+          jq -e '.schemaVersion == "1.2" and .structuralRestore.status == "PASSED" and .structuralRestore.identityMatched == true' "ci-evidence/v0.1-ci-drill-${CRV_IMAGE_TAG}-schema-1.2.json" >/dev/null
+      - name: Upload drill evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: drill-evidence-${{ matrix.splice-version }}
+          path: ci-evidence/*.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Capture diagnostics
         if: failure()
         run: |
@@ -81,7 +97,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: localnet-drill-diagnostics
+          name: localnet-drill-diagnostics-${{ matrix.splice-version }}
           path: ci-artifacts/
           if-no-files-found: ignore
           retention-days: 7
@@ -94,3 +110,21 @@ jobs:
           docker ps -aq --filter label=crv.run | xargs -r docker rm -f
           docker network ls -q --filter label=crv.run | xargs -r docker network rm
           docker volume ls -q --filter label=crv.run | xargs -r docker volume rm
+
+  cli-failure-contracts:
+    name: CLI failure contracts
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Exercise built CLI failure paths
+        run: ./experiments/10-cli-failure-contracts.sh
