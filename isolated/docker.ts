@@ -3,11 +3,12 @@ import { randomBytes } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import { createGunzip } from "node:zlib";
+import { DrillEnvironmentError } from "../errors.js";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
-import type { ArtifactCompression } from "../types.js";
+import type { ArtifactCompression, CleanupStatus } from "../types.js";
 
-interface ProcessResult {
+export interface ProcessResult {
   code: number;
   stdout: string;
   stderr: string;
@@ -91,22 +92,36 @@ export class DrillResources {
     const deadline = Date.now() + timeoutSeconds * 1000;
     while (Date.now() < deadline) {
       const result = await runProcess("docker", ["inspect", container, "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else if .State.Running}}running{{else}}stopped{{end}}"], true);
-      if (result.code === 0 && result.stdout.trim() === "healthy") return;
+      if (result.code !== 0) {
+        throw new DrillEnvironmentError("could not query Docker health for " + container + ": " + (result.stderr.trim() || result.stdout.trim() || "exit " + result.code));
+      }
+      if (result.stdout.trim() === "healthy") return;
       await delay(500);
     }
     throw new Error(`${container} did not become healthy within ${timeoutSeconds}s`);
   }
 
-  async cleanup(): Promise<void> {
-    await runProcess("docker", ["rm", "-f", "-v", this.participant, this.postgres], true);
-    await runProcess("docker", ["network", "rm", this.network], true);
-    await runProcess("docker", ["volume", "rm", "-f", this.volume], true);
-    const probes = await Promise.all([
-      runProcess("docker", ["container", "inspect", this.participant], true),
-      runProcess("docker", ["container", "inspect", this.postgres], true),
-      runProcess("docker", ["network", "inspect", this.network], true),
-      runProcess("docker", ["volume", "inspect", this.volume], true),
+  async cleanup(): Promise<CleanupStatus> {
+    await Promise.allSettled([
+      runProcess("docker", ["rm", "-f", "-v", this.participant, this.postgres], true),
+      runProcess("docker", ["network", "rm", this.network], true),
+      runProcess("docker", ["volume", "rm", "-f", this.volume], true),
     ]);
-    if (probes.some((probe) => probe.code === 0)) throw new Error(`drill cleanup failed; resources remain for ${this.id}`);
+    try {
+      const probes = await Promise.all([
+        runProcess("docker", ["container", "ls", "-a", "--filter", "name=" + this.participant, "--format", "{{.Names}}"], true),
+        runProcess("docker", ["container", "ls", "-a", "--filter", "name=" + this.postgres, "--format", "{{.Names}}"], true),
+        runProcess("docker", ["network", "ls", "--filter", "name=" + this.network, "--format", "{{.Name}}"], true),
+        runProcess("docker", ["volume", "ls", "--filter", "name=" + this.volume, "--format", "{{.Name}}"], true),
+      ]);
+      return cleanupStatusFromProbes(probes);
+    } catch {
+      return "COULD_NOT_VERIFY";
+    }
   }
+}
+
+export function cleanupStatusFromProbes(probes: ProcessResult[]): CleanupStatus {
+  if (probes.some((probe) => probe.code !== 0)) return "COULD_NOT_VERIFY";
+  return probes.some((probe) => probe.stdout.trim().length > 0) ? "VERIFIED_PRESENT" : "VERIFIED_ABSENT";
 }

@@ -218,7 +218,8 @@
         "identityStructureValid",
         "offsets",
         "limitations",
-        "schemaFamilies"
+        "schemaFamilies",
+        "unrecognizedOffsetTables"
       ],
       "properties": {
         "path": {
@@ -251,6 +252,7 @@
           "uniqueItems": true,
           "items": {
             "enum": [
+              "database",
               "participant",
               "validator",
               "identities",
@@ -336,6 +338,14 @@
           }
         },
         "schemaFamilies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "unrecognizedOffsetTables": {
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -480,11 +490,12 @@
       "required": [
         "status",
         "sqlRestored",
-        "participantServing",
+        "participantContainerHealthy",
         "identityMatched",
         "networkIsolated",
         "details",
-        "runtime"
+        "runtime",
+        "cleanupStatus"
       ],
       "properties": {
         "status": {
@@ -492,13 +503,11 @@
             "NOT_RUN",
             "PASSED",
             "PASSED_UNVERIFIED_VERSION",
-            "FAILED"
+            "FAILED",
+            "ENVIRONMENT_ERROR"
           ]
         },
         "sqlRestored": {
-          "$ref": "#/$defs/nullableBoolean"
-        },
-        "participantServing": {
           "$ref": "#/$defs/nullableBoolean"
         },
         "identityMatched": {
@@ -556,6 +565,17 @@
               ]
             }
           }
+        },
+        "participantContainerHealthy": {
+          "$ref": "#/$defs/nullableBoolean"
+        },
+        "cleanupStatus": {
+          "enum": [
+            "NOT_RUN",
+            "VERIFIED_ABSENT",
+            "VERIFIED_PRESENT",
+            "COULD_NOT_VERIFY"
+          ]
         }
       }
     },

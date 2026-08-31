@@ -194,3 +194,16 @@ export function recognizeOffsetShape(table: string, columns: string[]): { family
   }
   return null;
 }
+
+export function offsetShapeCandidatesForColumns(columns: string[]): Array<{ familyId: string; role: OffsetRole }> {
+  const candidates: Array<{ familyId: string; role: OffsetRole }> = [];
+  for (const family of compatibility.schemaFamilies.filter((candidate) => candidate.checks.includes(OFFSET_ORDER_CHECK))) {
+    for (const role of ["participant", "validator"] as const) {
+      if (family.shapes[role].columns.length === columns.length &&
+          family.shapes[role].columns.every((column, index) => column === columns[index])) {
+        candidates.push({ familyId: family.id, role });
+      }
+    }
+  }
+  return candidates;
+}

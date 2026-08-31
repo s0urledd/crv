@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { inspectArtifact } from "../artifact.js";
 import { checkOffsetOrder } from "../checks/offset-order.js";
+import { checkRequiredPath } from "../checks/required-path.js";
 import { recognizeOffsetShape } from "../compatibility.js";
 import { loadConfig, type CrvConfig } from "../config.js";
 import { observeNetworkVersion } from "../versions.js";
@@ -64,10 +65,10 @@ COPY validator.store_last_ingested_offsets (store_id, migration_id, last_ingeste
 `);
     const participant = await inspectArtifact(participantPath);
     const validator = await inspectArtifact(validatorPath);
-    assert.deepEqual(participant.roles, ["participant"]);
+    assert.deepEqual(participant.roles, ["database", "participant"]);
     assert.deepEqual(participant.offsets, []);
     assert.deepEqual(participant.schemaFamilies, []);
-    assert.match(participant.limitations.join(" "), /Offset schema shape is not recognized/);
+    assert.match(participant.limitations.join(" "), /Unrecognized offset-like table/);
     assert.equal(checkOffsetOrder([participant, validator]).status, "UNKNOWN");
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -120,6 +121,30 @@ network:
   scanVersionUrl: https://scan.example/not-version
 `);
     await assert.rejects(() => loadConfig(path), /must be an HTTP\(S\) \/api\/scan\/version URL/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps renamed offset tables as database artifacts and degrades dependent checks", async () => {
+  const root = await mkdtemp(join(tmpdir(), "crv-renamed-table-"));
+  const participantPath = join(root, "participant.sql");
+  const validatorPath = join(root, "validator.sql");
+  try {
+    const header = "-- PostgreSQL database dump\n-- Dumped from database version 14.24\n-- Dumped by pg_dump version 14.24\n";
+    await writeFile(participantPath, header + "COPY participant.renamed_lapi_parameters (ledger_end, participant_id, participant_pruned_up_to_inclusive, ledger_end_sequential_id, ledger_end_string_interning_id, ledger_end_publication_time) FROM stdin;\n65\tparticipant\t\\N\t1\t1\t2026-08-30 00:00:00+00\n\\.\n");
+    await writeFile(validatorPath, header + "COPY validator.store_last_ingested_offsets (store_id, migration_id, last_ingested_offset) FROM stdin;\n1\t0\t000000000000000040\n\\.\n");
+    const participant = await inspectArtifact(participantPath);
+    const validator = await inspectArtifact(validatorPath);
+    assert.deepEqual(participant.roles, ["database"]);
+    assert.deepEqual(participant.unrecognizedOffsetTables, ["participant.renamed_lapi_parameters"]);
+    const requiredPath = checkRequiredPath([participant, validator]);
+    assert.equal(requiredPath.status, "UNKNOWN");
+    assert.notEqual(requiredPath.status, "FAIL");
+    const ordering = checkOffsetOrder([participant, validator]);
+    assert.equal(ordering.status, "UNKNOWN");
+    assert.match(ordering.summary, /participant\.renamed_lapi_parameters/);
+    assert.match(ordering.summary, /splice-d2-offset-v1/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

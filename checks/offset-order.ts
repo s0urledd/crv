@@ -1,3 +1,4 @@
+import { compatibility } from "../compatibility.js";
 import type { ArtifactInspection, CheckDefinition, CheckResult } from "../types.js";
 
 const definition: CheckDefinition = {
@@ -56,7 +57,7 @@ export function checkOffsetOrder(
   const participant = candidates(artifacts, "participantLedgerEnd", participantDatabase);
   const validator = candidates(artifacts, "validatorLastIngested", validatorDatabase);
   const hasDatabaseRole = artifacts.some(
-    (artifact) => artifact.roles.includes("participant") || artifact.roles.includes("validator") || artifact.roles.includes("cluster"),
+    (artifact) => artifact.roles.includes("database"),
   );
   if (!hasDatabaseRole) {
     return {
@@ -69,9 +70,14 @@ export function checkOffsetOrder(
     };
   }
   if (participant.length !== 1 || validator.length !== 1) {
+    const unrecognizedTables = [...new Set(artifacts.flatMap((artifact) => artifact.unrecognizedOffsetTables))].sort();
+    const knownFamilies = compatibility.schemaFamilies.filter((family) => family.checks.includes("backup.offset_order")).map((family) => family.id).sort();
     const requirements = [
       "Provide one participant artifact containing participant.lapi_parameters.ledger_end and one validator artifact containing validator.store_last_ingested_offsets, or an unambiguous pg_dumpall containing both.",
     ];
+    if (unrecognizedTables.length > 0) {
+      requirements.unshift("Review offset table(s) " + unrecognizedTables.join(", ") + " against known schema families " + knownFamilies.join(", ") + "; add a compatibility family only after review.");
+    }
     if (artifacts.some((artifact) => artifact.format === "cluster_dump") && (participantDatabase === null || validatorDatabase === null)) {
       requirements.push("For a multi-database pg_dumpall, supply the captured participant and validator database names in the manifest.");
     }
@@ -79,12 +85,16 @@ export function checkOffsetOrder(
       ...definition,
       applicable: true,
       status: "UNKNOWN",
-      summary: "Exactly one participant ledger end and one validator offset could not be selected.",
+      summary: unrecognizedTables.length > 0
+        ? "Offset ordering is unknown because offset-like table(s) " + unrecognizedTables.join(", ") + " do not match known schema families " + knownFamilies.join(", ") + "."
+        : "Exactly one participant ledger end and one validator offset could not be selected.",
       evidence: {
         participantCandidates: participant.length,
         validatorCandidates: validator.length,
         selectedParticipantDatabase: participantDatabase,
         selectedValidatorDatabase: validatorDatabase,
+        unrecognizedOffsetTables: unrecognizedTables,
+        knownSchemaFamilies: knownFamilies,
       },
       requiredEvidence: requirements,
     };

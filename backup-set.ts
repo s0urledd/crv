@@ -74,7 +74,9 @@ async function inspectFromManifest(path: string): Promise<BackupSetInspection> {
       missingArtifactPaths.push(reference.path);
       continue;
     }
-    artifacts.push(await inspectArtifact(file, { displayPath: reference.path, computeSha256: true }));
+    const artifact = await inspectArtifact(file, { displayPath: reference.path, computeSha256: true });
+    artifact.roles = [...new Set([...artifact.roles.filter((role) => role !== "unknown"), ...reference.roles])];
+    artifacts.push(artifact);
     artifactLocations.set(reference.path, file);
   }
   return {

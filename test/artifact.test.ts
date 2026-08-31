@@ -17,7 +17,7 @@ const identities = (keyPair: string) => ({
 test("inspects participant offset from a plain dump", async () => {
   const artifact = await inspectArtifact(fixture("good", "participant.sql"));
   assert.equal(artifact.format, "plain_dump");
-  assert.deepEqual(artifact.roles, ["participant"]);
+  assert.deepEqual(artifact.roles, ["database", "participant"]);
   assert.equal(artifact.offsets[0]?.participantLedgerEnd, "65");
   assert.equal(artifact.postgresSourceVersion, "14.24");
 });
@@ -85,7 +85,7 @@ fi
     process.env.PATH = directory + ":" + (previousPath ?? "");
     const artifact = await inspectArtifact(archive);
     assert.equal(artifact.format, "custom_dump");
-    assert.deepEqual(artifact.roles, ["participant"]);
+    assert.deepEqual(artifact.roles, ["database", "participant"]);
     assert.equal(artifact.sourceDatabase, "participant-app-provider");
     assert.equal(artifact.offsets[0]?.participantLedgerEnd, "65");
     assert.deepEqual(artifact.schemaFamilies, ["splice-d2-offset-v1"]);

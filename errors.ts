@@ -4,3 +4,10 @@ export class UnsupportedInputError extends Error {
     this.name = "UnsupportedInputError";
   }
 }
+
+export class DrillEnvironmentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DrillEnvironmentError";
+  }
+}

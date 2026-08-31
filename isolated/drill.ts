@@ -4,10 +4,10 @@ import type { ArtifactInspection } from "../types.js";
 import { inspectBackupSet, type BackupSetInspection } from "../backup-set.js";
 import { checkSelectedIdentity } from "../checks/selected-identity.js";
 import { loadConfig, type CrvConfig } from "../config.js";
-import { UnsupportedInputError } from "../errors.js";
+import { DrillEnvironmentError, UnsupportedInputError } from "../errors.js";
 import { aggregate, exitCode } from "../report/aggregate.js";
 import { formatReport } from "../report/human.js";
-import type { VerificationReport } from "../types.js";
+import type { CleanupStatus, VerificationReport } from "../types.js";
 import { buildVerificationReport } from "../verify.js";
 import { observeNetworkVersion } from "../versions.js";
 import { DrillResources, runProcess, streamDockerInput } from "./docker.js";
@@ -61,21 +61,33 @@ function expectedIdentity(set: BackupSetInspection, config: CrvConfig | null): s
   return values.size === 1 ? [...values][0] ?? null : null;
 }
 
+async function environmentStep<T>(label: string, action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof DrillEnvironmentError) throw error;
+    const failure = error instanceof Error ? error : new Error(String(error));
+    throw new DrillEnvironmentError(label + ": " + sanitizeDrillError(failure));
+  }
+}
+
 async function executeDrill(
   set: BackupSetInspection,
   config: CrvConfig | null,
   report: VerificationReport,
   runtime: DrillRuntime,
-): Promise<{ participantId: string | null; participantDatabase: string; error: Error | null }> {
+): Promise<{ participantId: string | null; participantDatabase: string; error: Error | null; failureKind: "backup" | "environment" | null }> {
   const resources = new DrillResources();
   const details = report.structuralRestore.details;
-  let sqlRestored = false;
-  let participantServing = false;
-  let networkIsolated = false;
+  let sqlRestored: boolean | null = null;
+  let participantContainerHealthy: boolean | null = null;
+  let networkIsolated: boolean | null = null;
   let participantId: string | null = null;
   let participantDatabase = "";
   let failure: Error | null = null;
-  let signalCleanup: Promise<void> | null = null;
+  let failureKind: "backup" | "environment" | null = null;
+  let cleanupStatus: CleanupStatus = "NOT_RUN";
+  let signalCleanup: Promise<CleanupStatus> | null = null;
   const onSignal = (): void => {
     signalCleanup ??= resources.cleanup();
   };
@@ -83,19 +95,22 @@ async function executeDrill(
   process.once("SIGTERM", onSignal);
   const password = randomBytes(24).toString("hex");
   try {
-    await resources.create();
-    const internal = await runProcess("docker", ["network", "inspect", resources.network, "--format", "{{.Internal}}"]);
+    await environmentStep("Docker resource creation failed", () => resources.create());
+    const internal = await environmentStep("Docker network inspection failed", () =>
+      runProcess("docker", ["network", "inspect", resources.network, "--format", "{{.Internal}}"]));
     networkIsolated = internal.stdout.trim() === "true";
-    if (!networkIsolated) throw new Error("disposable Docker network is not internal");
+    if (!networkIsolated) throw new DrillEnvironmentError("disposable Docker network is not internal");
 
-    await runProcess("docker", [
+    await environmentStep("PostgreSQL drill container startup failed", async () => {
+      await runProcess("docker", [
       "run", "-d", "--name", resources.postgres, "--network", resources.network, "--network-alias", "postgres",
       "--label", `crv.run=${resources.id}`, "-v", `${resources.volume}:/var/lib/postgresql/data`,
       "-e", "POSTGRES_USER=postgres", "-e", `POSTGRES_PASSWORD=${password}`,
       "--health-cmd=pg_isready -U postgres", "--health-interval=1s", "--health-timeout=3s", "--health-retries=60",
       runtime.postgresImage,
     ]);
-    await resources.waitHealthy(resources.postgres, 90);
+      await resources.waitHealthy(resources.postgres, 90);
+    });
 
     const cluster = set.artifacts.filter((artifact) => artifact.format === "cluster_dump");
     const databaseArtifacts = set.artifacts.filter((artifact) => {
@@ -104,6 +119,7 @@ async function executeDrill(
     });
     if (cluster.length > 0 && databaseArtifacts.length > 0) throw new UnsupportedInputError("crv drill refuses a mixed cluster/per-database set");
     if (cluster.length > 1) throw new UnsupportedInputError("crv drill requires exactly one selected pg_dumpall artifact");
+    sqlRestored = false;
 
     participantDatabase = databaseName(
       config?.deployment.participantDatabase ?? set.manifest?.declared.participantDatabase ?? null,
@@ -134,7 +150,7 @@ async function executeDrill(
     }
     sqlRestored = true;
 
-    await runProcess("docker", [
+    await environmentStep("Participant drill container launch failed", () => runProcess("docker", [
       "run", "-d", "--name", resources.participant, "--network", resources.network,
       "--label", `crv.run=${resources.id}`,
       "-e", "CANTON_PARTICIPANT_POSTGRES_SERVER=postgres", "-e", "CANTON_PARTICIPANT_POSTGRES_PORT=5432",
@@ -144,9 +160,10 @@ async function executeDrill(
       "-e", "CANTON_PARTICIPANT_ADMIN_USER_NAME=ledger-api-user",
       "-e", "ADDITIONAL_CONFIG_LEDGER_AUTH=canton.participants.participant.ledger-api.auth-services=[]",
       runtime.participantImage,
-    ]);
+    ]));
+    participantContainerHealthy = false;
     await resources.waitHealthy(resources.participant, compatibility.runtime.participantStartupTimeoutSeconds);
-    participantServing = true;
+    participantContainerHealthy = true;
 
     const identity = await runProcess("docker", [
       "exec", resources.postgres, "psql", "-U", "postgres", "-d", participantDatabase, "-Atc",
@@ -156,28 +173,29 @@ async function executeDrill(
     details.push(`runtime=${runtime.spliceVersion}`, `postgresImage=${runtime.postgresImage}`, `participantImage=${runtime.participantImage}`, `versionEvidence=${runtime.versionEvidence}`);
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
-    details.push("drillError=" + sanitizeDrillError(failure));
+    failureKind = failure instanceof DrillEnvironmentError ? "environment" : "backup";
+    details.push((failureKind === "environment" ? "environmentError=" : "drillError=") + sanitizeDrillError(failure));
   } finally {
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
     report.structuralRestore.sqlRestored = sqlRestored;
-    report.structuralRestore.participantServing = participantServing;
+    report.structuralRestore.participantContainerHealthy = participantContainerHealthy;
     report.structuralRestore.networkIsolated = networkIsolated;
-    try {
-      if (signalCleanup !== null) {
-        try {
-          await signalCleanup;
-        } catch (error) {
-          details.push("signalCleanupError=" + sanitizeDrillError(error instanceof Error ? error : new Error(String(error))));
-        }
-      }
-      await resources.cleanup();
-      details.push("cleanup=verified-no-resources-remain");
-    } catch (cleanupError) {
-      throw cleanupError;
+    if (signalCleanup !== null) {
+      cleanupStatus = await signalCleanup;
+      details.push("signalCleanup=" + cleanupStatus);
+    }
+    cleanupStatus = await resources.cleanup();
+    report.structuralRestore.cleanupStatus = cleanupStatus;
+    details.push("cleanup=" + cleanupStatus);
+    if (cleanupStatus !== "VERIFIED_ABSENT") {
+      failure = new DrillEnvironmentError(cleanupStatus === "VERIFIED_PRESENT"
+        ? "drill resources remain after cleanup"
+        : "drill cleanup could not be verified because Docker probes failed");
+      failureKind = "environment";
     }
   }
-  return { participantId, participantDatabase, error: failure };
+  return { participantId, participantDatabase, error: failure, failureKind };
 }
 
 export async function drill(input: string, configPath?: string, now = new Date()): Promise<VerificationReport> {
@@ -194,15 +212,23 @@ export async function drill(input: string, configPath?: string, now = new Date()
   if (unknownPostgres) {
     throw new UnsupportedInputError(`crv drill requires PostgreSQL source version evidence for ${unknownPostgres.path}`);
   }
-  const runtime = await resolveDrillRuntime(set);
+  const report = buildVerificationReport(input, set, config, now);
+  report.versions.network = await observeNetworkVersion(config);
+  let runtime: DrillRuntime;
+  try {
+    runtime = await resolveDrillRuntime(set);
+  } catch (error) {
+    if (!(error instanceof DrillEnvironmentError)) throw error;
+    report.structuralRestore.status = "ENVIRONMENT_ERROR";
+    report.structuralRestore.details.push("environmentError=" + sanitizeDrillError(error));
+    return report;
+  }
   const postgresPattern = new RegExp(`^${runtime.postgresMajor}(?:\\.|\\s|$)`);
   const unsupportedPostgres = databaseArtifacts
     .map((artifact) => artifact.postgresSourceVersion as string)
     .find((version) => !postgresPattern.test(version));
   if (unsupportedPostgres) throw new UnsupportedInputError(`isolated runtime drill supports PostgreSQL ${runtime.postgresMajor} artifacts; received ${unsupportedPostgres}`);
 
-  const report = buildVerificationReport(input, set, config, now);
-  report.versions.network = await observeNetworkVersion(config);
   report.structuralRestore.runtime = {
     spliceVersion: runtime.spliceVersion,
     participantImage: runtime.participantImage,
@@ -214,8 +240,10 @@ export async function drill(input: string, configPath?: string, now = new Date()
   const expected = expectedIdentity(set, config);
   const identityMatched = result.error === null && expected !== null ? result.participantId === expected : false;
   report.structuralRestore.identityMatched = result.error !== null || expected === null ? null : identityMatched;
-  report.structuralRestore.status = result.error === null && report.structuralRestore.sqlRestored === true &&
-    report.structuralRestore.participantServing === true && report.structuralRestore.networkIsolated === true && identityMatched
+  report.structuralRestore.status = result.failureKind === "environment"
+    ? "ENVIRONMENT_ERROR"
+    : result.error === null && report.structuralRestore.sqlRestored === true &&
+    report.structuralRestore.participantContainerHealthy === true && report.structuralRestore.networkIsolated === true && identityMatched
     ? (runtime.versionEvidence === "TESTED" ? "PASSED" : "PASSED_UNVERIFIED_VERSION")
     : "FAILED";
 
@@ -233,8 +261,14 @@ export async function drill(input: string, configPath?: string, now = new Date()
   return report;
 }
 
+export function drillExitCode(report: VerificationReport): number {
+  if (report.structuralRestore.status === "ENVIRONMENT_ERROR") return 70;
+  if (report.structuralRestore.status === "FAILED") return 2;
+  return exitCode(report.preconditions.verdict);
+}
+
 export async function runDrill(input: string, json: boolean, configPath?: string): Promise<number> {
   const report = await drill(input, configPath);
   process.stdout.write(json ? `${JSON.stringify(report, null, 2)}\n` : `${formatReport(report)}\n`);
-  return report.structuralRestore.status === "FAILED" ? 2 : exitCode(report.preconditions.verdict);
+  return drillExitCode(report);
 }

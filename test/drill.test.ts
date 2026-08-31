@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { inspectBackupSet } from "../backup-set.js";
-import { drill } from "../isolated/drill.js";
+import { drill, drillExitCode } from "../isolated/drill.js";
+import { cleanupStatusFromProbes } from "../isolated/docker.js";
+import { DrillEnvironmentError } from "../errors.js";
 import { resolveDrillRuntime } from "../isolated/runtime.js";
 import { writeManifest } from "../manifest.js";
 import { formatReport } from "../report/human.js";
@@ -38,6 +40,10 @@ test("runs an unrecorded Splice version by immutable digest and marks it unverif
     assert.equal(runtime.versionEvidence, "UNVERIFIED");
     assert.match(runtime.participantImage, /@sha256:a{64}$/);
     assert.deepEqual(calls[0], ["pull", "ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant:0.6.10"]);
+    await assert.rejects(
+      () => resolveDrillRuntime(inspected, async () => { throw new Error("daemon unavailable"); }),
+      (error: unknown) => error instanceof DrillEnvironmentError,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -66,15 +72,41 @@ test("human report exposes structural failure and cleanup evidence", async () =>
   report.structuralRestore = {
     status: "FAILED",
     sqlRestored: false,
-    participantServing: false,
+    participantContainerHealthy: false,
     identityMatched: null,
     networkIsolated: true,
+    cleanupStatus: "VERIFIED_ABSENT",
     runtime: { spliceVersion: "0.6.9", participantImage: "repo@sha256:test", versionEvidence: "UNVERIFIED", testedAt: null, evidence: null },
-    details: ["drillError=psql rejected truncated COPY", "cleanup=verified-no-resources-remain"],
+    details: ["drillError=psql rejected truncated COPY", "cleanup=VERIFIED_ABSENT"],
   };
   const output = formatReport(report);
   assert.match(output, /SQL restored: NO/);
+  assert.match(output, /Participant container healthcheck: NO/);
+  assert.match(output, /Cleanup status: VERIFIED_ABSENT/);
   assert.match(output, /Identity matched: UNKNOWN/);
   assert.match(output, /psql rejected truncated COPY/);
-  assert.match(output, /cleanup=verified-no-resources-remain/);
+  assert.match(output, /cleanup=VERIFIED_ABSENT/);
+  assert.match(output, /Artifact limitation \[participant.sql\]:/);
+  assert.match(output, /Remediation for backup.latest_age:/);
+});
+
+test("cleanup verification distinguishes absent, present, and failed probes", () => {
+  const empty = { code: 0, stdout: "", stderr: "" };
+  assert.equal(cleanupStatusFromProbes([empty, empty]), "VERIFIED_ABSENT");
+  const failed = { code: 1, stdout: "", stderr: "daemon unavailable" };
+  assert.equal(cleanupStatusFromProbes([empty, failed]), "COULD_NOT_VERIFY");
+  const present = { code: 0, stdout: "crv-resource\n", stderr: "" };
+  assert.equal(cleanupStatusFromProbes([empty, present]), "VERIFIED_PRESENT");
+});
+
+test("environment execution failure has its own status, headline, and exit code", async () => {
+  const report = await verify(fixture("good"));
+  report.structuralRestore.status = "ENVIRONMENT_ERROR";
+  report.structuralRestore.cleanupStatus = "COULD_NOT_VERIFY";
+  report.structuralRestore.details = ["environmentError=Docker daemon unavailable"];
+  const output = formatReport(report);
+  assert.match(output, /ENVIRONMENT_ERROR \(the drill environment prevented execution\)/);
+  assert.equal(drillExitCode(report), 70);
+  report.structuralRestore.status = "FAILED";
+  assert.equal(drillExitCode(report), 2);
 });
