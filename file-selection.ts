@@ -22,7 +22,12 @@ async function walk(directory: string): Promise<string[]> {
 
 export async function selectInputFiles(input: string): Promise<InputSelection> {
   const absolute = resolve(input);
-  const metadata = await stat(absolute);
+  let metadata;
+  try {
+    metadata = await stat(absolute);
+  } catch {
+    throw new UnsupportedInputError(`input path is not accessible: ${input}`);
+  }
   if (metadata.isFile()) return { root: absolute, files: [absolute], single: true };
   if (!metadata.isDirectory()) throw new UnsupportedInputError(`not a file or directory: ${input}`);
   return { root: absolute, files: await walk(absolute), single: false };

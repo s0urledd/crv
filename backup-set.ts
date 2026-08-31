@@ -1,8 +1,9 @@
 import { access, readFile, stat } from "node:fs/promises";
 import { basename, join, relative, resolve } from "node:path";
-import { inspectArtifact } from "./artifact.js";
+import { computeSha256, inspectArtifact } from "./artifact.js";
 import { containedPath, selectInputFiles } from "./file-selection.js";
 import { MANIFEST_FILENAME, manifestRoot, readManifest, type CaptureManifest } from "./manifest.js";
+import { UnsupportedInputError } from "./errors.js";
 import type { ArtifactInspection, BackupSetLayout } from "./types.js";
 
 export interface BackupSetInspection {
@@ -13,6 +14,44 @@ export interface BackupSetInspection {
   manifest: CaptureManifest | null;
   manifestPath: string | null;
   missingArtifactPaths: string[];
+}
+
+function inspectionFailureReason(error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return reason.replace(/\s+/g, " ").trim().slice(0, 512) || "unknown inspection error";
+}
+
+async function inspectFile(
+  file: string,
+  displayPath: string,
+  computeDigest: boolean,
+): Promise<ArtifactInspection> {
+  try {
+    return await inspectArtifact(file, { displayPath, computeSha256: computeDigest });
+  } catch (error) {
+    const metadata = await stat(file);
+    const digest = computeDigest ? await computeSha256(file).catch(() => null) : null;
+    return {
+      path: displayPath,
+      format: "unknown",
+      compression: "unknown",
+      roles: ["unknown"],
+      sizeBytes: metadata.size,
+      sha256: digest,
+      sourceDatabase: null,
+      databases: [],
+      postgresSourceVersion: null,
+      postgresDumperVersion: null,
+      archiveCreatedAt: null,
+      spliceVersion: null,
+      participantId: null,
+      identityStructureValid: null,
+      schemaFamilies: [],
+      unrecognizedOffsetTables: [],
+      offsets: [],
+      limitations: ["could not be inspected: " + inspectionFailureReason(error)],
+    };
+  }
 }
 
 function classify(artifacts: ArtifactInspection[], single: boolean): BackupSetLayout {
@@ -41,7 +80,12 @@ async function canAccess(path: string): Promise<boolean> {
 
 async function manifestFromInput(input: string): Promise<string | null> {
   const absolute = resolve(input);
-  const metadata = await stat(absolute);
+  let metadata;
+  try {
+    metadata = await stat(absolute);
+  } catch {
+    throw new UnsupportedInputError(`input path is not accessible: ${input}`);
+  }
   if (metadata.isDirectory()) {
     const candidate = join(absolute, MANIFEST_FILENAME);
     return await canAccess(candidate) ? candidate : null;
@@ -74,10 +118,15 @@ async function inspectFromManifest(path: string): Promise<BackupSetInspection> {
       missingArtifactPaths.push(reference.path);
       continue;
     }
-    const artifact = await inspectArtifact(file, { displayPath: reference.path, computeSha256: true });
-    artifact.roles = [...new Set([...artifact.roles.filter((role) => role !== "unknown"), ...reference.roles])];
+    const artifact = await inspectFile(file, reference.path, true);
+    if (artifact.format !== "unknown") {
+      artifact.roles = [...new Set([...artifact.roles.filter((role) => role !== "unknown"), ...reference.roles])];
+    }
     artifacts.push(artifact);
     artifactLocations.set(reference.path, file);
+  }
+  if (!artifacts.some((artifact) => artifact.format !== "unknown")) {
+    throw new UnsupportedInputError(`no artifact could be inspected for input: ${path}`);
   }
   return {
     root,
@@ -99,11 +148,12 @@ export async function inspectBackupSet(input: string): Promise<BackupSetInspecti
   const artifactLocations = new Map<string, string>();
   for (const file of selected.files) {
     const displayPath = selected.single ? input : relative(selected.root, file);
-    const artifact = await inspectArtifact(file, { displayPath });
-    if (artifact.format !== "unknown") {
-      artifacts.push(artifact);
-      artifactLocations.set(displayPath, file);
-    }
+    const artifact = await inspectFile(file, displayPath, false);
+    artifacts.push(artifact);
+    artifactLocations.set(displayPath, file);
+  }
+  if (!artifacts.some((artifact) => artifact.format !== "unknown")) {
+    throw new UnsupportedInputError(`no artifact could be inspected for input: ${input}`);
   }
   return {
     root: selected.single ? resolve(input, "..") : selected.root,

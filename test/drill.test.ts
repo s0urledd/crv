@@ -3,19 +3,89 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { checkSelectedIdentity } from "../checks/selected-identity.js";
+import { inspectArtifact } from "../artifact.js";
 import { inspectBackupSet } from "../backup-set.js";
-import { drill, drillExitCode } from "../isolated/drill.js";
+import { drill, drillExitCode, readRestoredParticipantIdentity } from "../isolated/drill.js";
 import { cleanupStatusFromProbes } from "../isolated/docker.js";
 import { DrillEnvironmentError } from "../errors.js";
-import { resolveDrillRuntime } from "../isolated/runtime.js";
-import { writeManifest } from "../manifest.js";
+import { exactDrillVersion, resolveDrillRuntime } from "../isolated/runtime.js";
+import { writeManifest, type CaptureManifest } from "../manifest.js";
 import { formatReport } from "../report/human.js";
 import { verify } from "../verify.js";
+import { observeBackupVersion } from "../versions.js";
 
 const fixture = (name: string) => resolve(process.cwd(), "test", "fixtures", name);
 
+test("reads an arbitrary restored participant name and requires one identity row", async () => {
+  const expected = "PAR::acme-validator-7::1220" + "a".repeat(64);
+  const different = "PAR::acme-validator-8::1220" + "b".repeat(64);
+  const calls: string[][] = [];
+  const read = async (stdout: string) => readRestoredParticipantIdentity("postgres-test", "participant-4", async (_command, args) => {
+    calls.push(args);
+    return { code: 0, stdout, stderr: "" };
+  });
+  const participant = await inspectArtifact(join(fixture("good"), "participant.sql"));
+  const capture: CaptureManifest = {
+    schemaVersion: "1.0",
+    createdAt: "2026-08-31T00:00:00.000Z",
+    updatedAt: "2026-08-31T00:00:00.000Z",
+    declared: {
+      captureStartedAt: null, validatorCompletedAt: null, participantStartedAt: null, captureCompletedAt: null,
+      spliceVersion: "0.6.11", participantDatabase: "participant-4", validatorDatabase: null,
+      expectedParticipantId: expected, physicalSynchronizerId: null, physicalSynchronizerSerial: null,
+    },
+    artifacts: [],
+  };
+
+  const restored = await read(expected + "\n");
+  assert.deepEqual(restored, { participantId: expected, rowCount: 1 });
+  assert.match(calls[0]?.join(" ") ?? "", /participant\.common_node_id/);
+  assert.doesNotMatch(calls[0]?.join(" ") ?? "", /identifier=.*participant/);
+  const pass = checkSelectedIdentity([participant], capture, null, { database: "restored-participant", ...restored });
+  assert.equal(pass.status, "PASS");
+  assert.equal(pass.evidence.rowCount, 1);
+
+  const mismatch = await read(different + "\n");
+  assert.equal(checkSelectedIdentity([participant], capture, null, { database: "participant-4", ...mismatch }).status, "FAIL");
+
+  for (const [stdout, rowCount] of [["", 0], [expected + "\n" + different + "\n", 2]] as const) {
+    const ambiguous = await read(stdout);
+    assert.deepEqual(ambiguous, { participantId: null, rowCount });
+    const result = checkSelectedIdentity([participant], capture, null, { database: "participant-4", ...ambiguous });
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.evidence.restoredParticipantId, null);
+    assert.equal(result.evidence.rowCount, rowCount);
+  }
+});
+
 test("refuses a runtime drill before Docker when exact Splice version is absent", async () => {
   await assert.rejects(() => drill(fixture("good")), /requires one exact Splice version/);
+});
+
+test("names every source in conflicting Splice version evidence", async () => {
+  const root = await mkdtemp(join(tmpdir(), "crv-version-conflict-"));
+  const set = join(root, "set");
+  try {
+    await cp(fixture("good"), set, { recursive: true });
+    await writeFile(join(set, "identities_20260429_165550.json"), JSON.stringify({
+      id: "PAR::synthetic-validator::1220" + "c".repeat(64),
+      version: "0.5.18",
+      authorizedStoreSnapshot: "Ag==",
+      keys: ["namespace", "signing", "encryption"].map((name) => ({ name, keyPair: "AQ==" })),
+    }));
+    const manifestPath = await writeManifest(set);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    (manifest.declared as Record<string, unknown>).spliceVersion = "0.6.11";
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+    const inspected = await inspectBackupSet(set);
+    const expected = "0.5.18 (artifact:identities_20260429_165550.json), 0.6.11 (manifest.declared.spliceVersion)";
+    assert.throws(() => exactDrillVersion(inspected), (error: unknown) =>
+      error instanceof Error && error.message === "crv drill requires one exact Splice version; conflicting evidence: " + expected);
+    assert.equal(observeBackupVersion(inspected).detail, "Conflicting backup-set versions: " + expected + ".");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("runs an unrecorded Splice version by immutable digest and marks it unverified", async () => {

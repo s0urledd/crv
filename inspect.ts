@@ -1,5 +1,7 @@
+import { stat } from "node:fs/promises";
 import type { ArtifactInspection } from "./types.js";
 import { inspectArtifact } from "./artifact.js";
+import { UnsupportedInputError } from "./errors.js";
 
 function value(input: string | number | null): string {
   return input === null ? "unknown" : String(input);
@@ -38,6 +40,16 @@ export function formatInspection(artifact: ArtifactInspection): string {
 }
 
 export async function runInspect(path: string, json: boolean): Promise<void> {
+  let metadata;
+  try {
+    metadata = await stat(path);
+  } catch {
+    throw new UnsupportedInputError(`input path is not accessible: ${path}`);
+  }
+  if (metadata.isDirectory()) {
+    throw new UnsupportedInputError(`crv inspect takes a file; use crv verify for a directory: ${path}`);
+  }
+  if (!metadata.isFile()) throw new UnsupportedInputError(`crv inspect takes a regular file: ${path}`);
   const artifact = await inspectArtifact(path);
   process.stdout.write(json ? `${JSON.stringify(artifact, null, 2)}\n` : `${formatInspection(artifact)}\n`);
 }

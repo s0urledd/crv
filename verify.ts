@@ -7,7 +7,7 @@ import { checkReferenceDigest } from "./checks/reference-digest.js";
 import { checkRequiredPath } from "./checks/required-path.js";
 import { checkSelectedIdentity } from "./checks/selected-identity.js";
 import { loadConfig, type CrvConfig } from "./config.js";
-import { aggregate, exitCode } from "./report/aggregate.js";
+import { aggregate, exitCode, hasCompleteDatabasePair } from "./report/aggregate.js";
 import { formatReport } from "./report/human.js";
 import { REPORT_SCHEMA_VERSION, type VerificationReport } from "./types.js";
 import { VERSION } from "./version.js";
@@ -28,6 +28,7 @@ export function buildVerificationReport(
       artifacts,
       set.manifest?.declared.participantDatabase ?? config?.deployment.participantDatabase ?? null,
       set.manifest?.declared.validatorDatabase ?? config?.deployment.validatorDatabase ?? null,
+      set.manifest?.declared ?? null,
     ),
     checkBackupAge(artifacts, set.manifest, config, now),
     checkSelectedIdentity(artifacts, set.manifest, config),
@@ -38,7 +39,7 @@ export function buildVerificationReport(
     tool: { name: "crv", version: VERSION },
     generatedAt: now.toISOString(),
     subject: { input, manifest: set.manifestPath, layout: set.layout },
-    preconditions: aggregate(checks),
+    preconditions: aggregate(checks, hasCompleteDatabasePair(artifacts)),
     versions: {
       backup: observeBackupVersion(set),
       network: { status: "UNKNOWN", value: null, source: null, commitTs: null, detail: "Network version was not queried." },

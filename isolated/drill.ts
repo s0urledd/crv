@@ -5,7 +5,7 @@ import { inspectBackupSet, type BackupSetInspection } from "../backup-set.js";
 import { checkSelectedIdentity } from "../checks/selected-identity.js";
 import { loadConfig, type CrvConfig } from "../config.js";
 import { DrillEnvironmentError, UnsupportedInputError } from "../errors.js";
-import { aggregate, exitCode } from "../report/aggregate.js";
+import { aggregate, exitCode, hasCompleteDatabasePair } from "../report/aggregate.js";
 import { formatReport } from "../report/human.js";
 import type { CleanupStatus, VerificationReport } from "../types.js";
 import { buildVerificationReport } from "../verify.js";
@@ -51,6 +51,30 @@ async function restoreArtifact(
   await streamDockerInput(command, location, artifact.compression);
 }
 
+export interface RestoredParticipantIdentity {
+  participantId: string | null;
+  rowCount: number;
+}
+
+export async function readRestoredParticipantIdentity(
+  postgresContainer: string,
+  database: string,
+  runner = runProcess,
+): Promise<RestoredParticipantIdentity> {
+  const result = await runner("docker", [
+    "exec", postgresContainer, "psql", "-U", "postgres", "-d", database, "-Atc",
+    "select 'PAR::' || identifier || '::' || namespace from participant.common_node_id",
+  ]);
+  const rows = result.stdout
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter((row) => row.length > 0);
+  return {
+    participantId: rows.length === 1 ? rows[0] ?? null : null,
+    rowCount: rows.length,
+  };
+}
+
 function expectedIdentity(set: BackupSetInspection, config: CrvConfig | null): string | null {
   const values = new Set<string>();
   if (set.manifest?.declared.expectedParticipantId) values.add(set.manifest.declared.expectedParticipantId);
@@ -93,7 +117,7 @@ async function executeDrill(
   config: CrvConfig | null,
   report: VerificationReport,
   runtime: DrillRuntime,
-): Promise<{ participantId: string | null; participantDatabase: string; error: Error | null; failureKind: "backup" | "environment" | null }> {
+): Promise<{ participantId: string | null; participantDatabase: string; identityRowCount: number; error: Error | null; failureKind: "backup" | "environment" | null }> {
   const resources = new DrillResources();
   const details = report.structuralRestore.details;
   const totalStartedAt = process.hrtime.bigint();
@@ -101,6 +125,7 @@ async function executeDrill(
   let participantContainerHealthy: boolean | null = null;
   let networkIsolated: boolean | null = null;
   let participantId: string | null = null;
+  let identityRowCount = 0;
   let participantDatabase = "";
   let failure: Error | null = null;
   let failureKind: "backup" | "environment" | null = null;
@@ -196,11 +221,9 @@ async function executeDrill(
       participantContainerHealthy = true;
     });
 
-    const identity = await runProcess("docker", [
-      "exec", resources.postgres, "psql", "-U", "postgres", "-d", participantDatabase, "-Atc",
-      "select 'PAR::' || identifier || '::' || namespace from participant.common_node_id where identifier='participant'",
-    ]);
-    participantId = identity.stdout.trim() || null;
+    const identity = await readRestoredParticipantIdentity(resources.postgres, participantDatabase);
+    participantId = identity.participantId;
+    identityRowCount = identity.rowCount;
     details.push(`runtime=${runtime.spliceVersion}`, `postgresImage=${runtime.postgresImage}`, `participantImage=${runtime.participantImage}`, `versionEvidence=${runtime.versionEvidence}`);
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
@@ -227,7 +250,7 @@ async function executeDrill(
     }
     details.push(`timing.totalMs=${elapsedMilliseconds(totalStartedAt)}`);
   }
-  return { participantId, participantDatabase, error: failure, failureKind };
+  return { participantId, participantDatabase, identityRowCount, error: failure, failureKind };
 }
 
 export async function drill(input: string, configPath?: string, now = new Date()): Promise<VerificationReport> {
@@ -285,9 +308,9 @@ export async function drill(input: string, configPath?: string, now = new Date()
       set.artifacts,
       set.manifest,
       config,
-      { database: result.participantDatabase, participantId: result.participantId },
+      { database: result.participantDatabase, participantId: result.participantId, rowCount: result.identityRowCount },
     );
-    report.preconditions = aggregate(report.checks);
+    report.preconditions = aggregate(report.checks, hasCompleteDatabasePair(set.artifacts));
   }
   if (expected === null) report.structuralRestore.details.push("identityMatch=unknown-no-single-expected-identity");
   return report;

@@ -15,6 +15,7 @@ const definition: CheckDefinition = {
 export interface RestoredIdentityEvidence {
   database: string;
   participantId: string | null;
+  rowCount: number;
 }
 
 export function checkSelectedIdentity(
@@ -49,16 +50,15 @@ export function checkSelectedIdentity(
   const expectedParticipantId = expectedValues[0] ?? null;
   const selectedDatabase = config?.deployment.participantDatabase ?? manifest?.declared.participantDatabase ?? null;
   if (restored !== null) {
-    const databaseMatches = selectedDatabase !== null && restored.database === selectedDatabase;
     const identityMatches = expectedParticipantId !== null && restored.participantId === expectedParticipantId;
     return {
       ...definition,
       applicable: true,
-      status: databaseMatches && identityMatches ? "PASS" : "FAIL",
-      summary: databaseMatches && identityMatches
+      status: identityMatches ? "PASS" : "FAIL",
+      summary: identityMatches
         ? "The selected restored database contains the expected participant identity."
         : "The selected restored database does not contain the expected participant identity.",
-      evidence: { selectedDatabase, restoredDatabase: restored.database, expectedParticipantId, restoredParticipantId: restored.participantId },
+      evidence: { selectedDatabase, restoredDatabase: restored.database, expectedParticipantId, restoredParticipantId: restored.participantId, rowCount: restored.rowCount },
       requiredEvidence: [],
     };
   }

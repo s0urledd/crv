@@ -38,6 +38,10 @@ objects. `MET` means only that every applicable, shipped recovery-precondition
 check had sufficient evidence and passed. It never means `RECOVERABLE` and does
 not prove synchronizer catch-up.
 
+Fast `verify` tops out at `INDETERMINATE`: database sets still require the
+offline selected-identity check, while identities-only sets have no complete
+database pair. `MET` is reachable only after a successful drill.
+
 Every applicable `UNKNOWN` result has at least one `requiredEvidence` entry
 that tells the operator exactly what value or artifact would resolve it.
 A non-applicable check remains visible with `applicable: false`; human output
@@ -79,6 +83,11 @@ capture timestamp from mtime.
 Manifests written by current crv binaries may include the additive `database`
 role and are rejected by older crv binaries; the manifest schema remains 1.0
 because readers of this version can accept the additive role.
+
+The declared participant database name is an input that selects which restored
+database the drill starts and queries. The report records both the declared and
+restored names, but the drill cannot independently confirm that the declaration
+was the live deployment's effective database name.
 
 `crv init-config [path]` writes a commented, runnable `crv.yaml` and refuses to
 overwrite an existing file. Pass it with `--config <path>`. A horizon has no

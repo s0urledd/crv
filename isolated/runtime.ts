@@ -1,7 +1,7 @@
 import type { BackupSetInspection } from "../backup-set.js";
 import { compatibility } from "../compatibility.js";
 import { DrillEnvironmentError, UnsupportedInputError } from "../errors.js";
-import { backupVersionEvidence } from "../versions.js";
+import { backupVersionEvidence, formatBackupVersionEvidence } from "../versions.js";
 import { runProcess } from "./docker.js";
 
 interface ProcessResult {
@@ -28,7 +28,7 @@ export function exactDrillVersion(set: BackupSetInspection): string {
     throw new UnsupportedInputError("crv drill requires one exact Splice version from manifest or identities export");
   }
   if (evidence.values.length !== 1) {
-    throw new UnsupportedInputError(`crv drill requires one exact Splice version; conflicting evidence: ${evidence.values.join(", ")}`);
+    throw new UnsupportedInputError(`crv drill requires one exact Splice version; conflicting evidence: ${formatBackupVersionEvidence(evidence.entries)}`);
   }
   const version = evidence.values[0];
   if (!version || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(version)) {

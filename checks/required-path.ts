@@ -22,7 +22,9 @@ export function checkRequiredPath(artifacts: ArtifactInspection[]): CheckResult 
       status: "PASS",
       summary: databasePair
         ? "Participant and validator database evidence are present."
-        : "An identities fallback artifact is present.",
+        : databaseArtifacts.length > 0
+          ? "An identities fallback artifact is present; database artifacts are present but do not form a complete pair."
+          : "An identities fallback artifact is present.",
       evidence: { databasePair, databaseArtifacts: databaseArtifacts.map((artifact) => artifact.path), identitiesFallback: identities },
       requiredEvidence: [],
     };
