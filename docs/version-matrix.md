@@ -9,8 +9,8 @@ Fast checks do not branch on a Splice release number. The runtime
 `compatibility.json` record binds each check to exact table and ordered-column
 shapes. The current `splice-d2-offset-v1` family was source-reviewed across
 public Splice 0.6.0–0.6.14 tags. An artifact with that exact shape enables D2
-even when its release is unknown. An unfamiliar shape makes only dependent
-checks `UNKNOWN`.
+even when its release is unknown. A renamed table or unfamiliar column shape
+keeps the database artifact visible and makes only dependent checks `UNKNOWN`.
 
 The release review remains useful evidence about where a family was observed;
 it is not a version allowlist.

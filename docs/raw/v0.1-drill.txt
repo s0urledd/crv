@@ -20,7 +20,7 @@ per-database set:
 - reference digests matched
 - validator offset 31 <= participant ledger end 35
 - SQL restore: yes
-- participant SERVING: yes
+- participant container healthcheck: passed
 - selected DB identity matched expected identities export: yes
 - offline structural restore: PASSED
 - wall time: 23.7 seconds
@@ -31,7 +31,7 @@ pg_dumpall set:
 - manifest selected participant-app-provider and validator-app-provider sections
 - validator offset 59 <= participant ledger end 61
 - SQL restore: yes
-- participant SERVING: yes
+- participant container healthcheck: passed
 - selected DB identity matched: yes
 - offline structural restore: PASSED
 - post-run container/network/volume inventory with label crv.run: empty
@@ -41,7 +41,7 @@ truncated participant set:
 - psql: missing data for column during COPY
 - artifact row payload redacted from report
 - SQL restore: no
-- participant SERVING: no
+- participant container healthcheck: not run
 - identity match: UNKNOWN because the query was not reached
 - offline structural restore: FAILED
 - wall time: 9.8 seconds
@@ -49,7 +49,7 @@ truncated participant set:
 
 SIGINT during pg_dumpall restore:
 - drill reported structural FAILED with write EPIPE
-- cleanup detail: verified-no-resources-remain
+- cleanup status: VERIFIED_ABSENT
 - independent container/network/volume inventory with label crv.run: empty
 
 Claim ceiling: these runs prove structural restore, isolated participant startup,

@@ -9,9 +9,10 @@ names the exact table and ordered columns a check understands, their canonical
 SHA-256, and the upstream schema-definition hash reviewed for that family.
 
 A recognized shape enables its dependent check regardless of the declared
-Splice release. A known table with an unknown column shape keeps its artifact
-role but yields no offset value; dependent checks report `UNKNOWN`. CRV never
-guesses an adapter from a nearby version. Existing adapters remain available
+Splice release. A PostgreSQL dump remains a database artifact when an offset
+table is renamed or its columns are unfamiliar, but it yields no offset value;
+dependent checks report `UNKNOWN` and name the table and known families. CRV
+never guesses an adapter from a nearby version. Existing adapters remain available
 when a new family is added.
 
 ## Isolated drill
