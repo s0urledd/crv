@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        splice-version: ["0.6.9", "0.6.11", "0.6.14"]
+        splice-version: ["0.6.9", "0.6.11", "0.6.14", "0.7.5"]
     env:
       CRV_IMAGE_TAG: ${{ matrix.splice-version }}
     steps:
