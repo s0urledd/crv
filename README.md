@@ -47,7 +47,7 @@ Use JSON for automation:
 crv verify /backups/latest --config /etc/crv/crv.yaml --json
 ```
 
-Report schema: [`docs/report-schema-v1.1.json`](docs/report-schema-v1.1.json).
+Report schema: [`docs/report-schema-v1.2.json`](docs/report-schema-v1.2.json).
 Exit codes: `0` MET, `1` AT_RISK, `2` FAILED, `3` INDETERMINATE,
 `64` usage, `65` unsupported input/version, `70` drill environment or execution error.
 
