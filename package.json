@@ -18,6 +18,7 @@
     "docs/report-schema-v1.2.json",
     "docs/version-policy.md",
     "docs/version-matrix.md",
+    "docs/operator-guide.md",
     "docs/manifest-schema-v1.json"
   ],
   "engines": {

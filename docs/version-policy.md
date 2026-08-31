@@ -45,11 +45,12 @@ from the current network version.
 
 ## Maintenance
 
-The weekly `Splice compatibility watch` workflow selects the newest public
-`0.6.x` tag, rejects unknown upstream schema-definition hashes, runs the full
-LocalNet drill, and uploads the resulting compatibility candidate. A maintainer
-reviews that evidence in a normal PR before adding it to the runtime record.
-A failed workflow is the compatibility regression signal.
+The weekly `Splice compatibility watch` workflow inspects the full public
+release-tag stream and always prints the newest tag seen. It classifies the
+upstream schema source as unchanged, changed with its table/hash, or
+unfetchable. An unchanged unrecorded release is a candidate for `TESTED` only
+after the full LocalNet drill; a maintainer reviews generated evidence in a
+normal PR before changing the runtime record.
 
 This policy is not version management, an upgrade advisor, or a promise that
 offline structural success proves synchronizer catch-up.
