@@ -6,7 +6,8 @@ Decision: **GO only as a recovery-precondition verifier. Do not use the verdict
 word `RECOVERABLE`.**
 
 `crv` can objectively test important prerequisites and can restore a participant
-offline far enough to prove that it reaches `SERVING` with its identity intact.
+offline far enough to prove that its container healthcheck passes with its
+identity intact.
 It cannot prove that the node will catch up to the live synchronizer, that an old
 physical synchronizer remains usable, or complete validator-app and participant
 semantic consistency beyond the demonstrated offset invariant. Phase 2 must
@@ -324,8 +325,8 @@ the restored participant shuts down. The docs also state that participant
 identities generally cannot be reused on the same global synchronizer.
 
 **tested on LocalNet.** A LocalNet participant dump was restored to PostgreSQL
-14 on an internal Docker network. The official participant image reached
-`SERVING` in 8.63 seconds, reported zero connected synchronizers, and exposed
+14 on an internal Docker network. The official participant image healthcheck
+passed in 8.63 seconds, reported zero connected synchronizers, and exposed
 the same participant ID as the LocalNet identities dump. The
 `exit-on-fatal-failures` override was not needed for this healthy fixture.
 The clean reproduction script took 23 seconds end to end. Participant DB size
@@ -337,7 +338,7 @@ needed for structural restore and identity. Adding it did not create a generic
 ordering detector in D2. The smallest defensible signal is all of:
 
 - SQL restore completes;
-- participant reaches `SERVING`;
+- participant container healthcheck passes;
 - participant ID equals the expected artifact/manifest identity;
 - the Docker network is internal and contains no synchronizer service.
 
@@ -370,11 +371,11 @@ one verdict.
 | Dimension | Status | Meaning |
 | --- | --- | --- |
 | Recovery preconditions | `MET`, `AT_RISK`, `FAILED`, `INDETERMINATE` | Aggregate of proven invariants, recovery prerequisites, heuristics, and unavailable evidence. It is not a promise that recovery will succeed. |
-| Offline structural restore | `NOT_RUN`, `PASSED`, `FAILED` | Separately states whether SQL restored, participant reached `SERVING`, identity matched, and network isolation held. |
+| Offline structural restore | `NOT_RUN`, `PASSED`, `PASSED_UNVERIFIED_VERSION`, `FAILED`, `ENVIRONMENT_ERROR` | Separately states whether SQL restored, the participant container healthcheck passed, identity matched, network isolation held, and cleanup was verified. `ENVIRONMENT_ERROR` means the backup was not judged because the drill environment failed. |
 
 Precondition precedence is `FAILED`, `INDETERMINATE`, `AT_RISK`, then `MET`.
-Individual checks use `PASS`, `FAIL`, `WARN`, or `UNKNOWN`. A structural failure
-may also fail the applicable artifact path, but a structural pass never upgrades
+Individual checks use `PASS`, `FAIL`, `WARN`, or `UNKNOWN`. A backup
+structural failure may also fail the applicable artifact path, but a structural pass never upgrades
 preconditions and is always presented separately.
 
 ## D6. Identities dump validation
@@ -473,7 +474,7 @@ the checks marked “ship” are eligible for v0.1.
 | Historical backup spacing is below participant retention | Recovery prerequisite | Ship only for declared historical-continuity claim | Failure affects that claim, not immediate latest-set recovery. |
 | Backup crossed an LSU and old physical synchronizer remains available | Recovery prerequisite | Ship | Known unavailable old synchronizer can fail; published-but-unproven availability may be `UNKNOWN`. |
 | Plain/custom/cluster dump parses and SQL restore completes | Structural validation | Ship | Failure can fail artifact path; success never creates a passing verdict alone. |
-| Restored participant reaches `SERVING` with expected identity offline | Structural validation | Ship behind isolated mode | Failure can fail artifact path; success does not prove catch-up. |
+| Restored participant container healthcheck passes with expected identity offline | Structural validation | Ship behind isolated mode | Failure can fail artifact path; success does not prove catch-up. |
 | Identities JSON fields/base64 are structurally valid | Structural validation | Ship | Failure invalidates identities path; success alone is insufficient. |
 | Backup frequency recommendation (for example four hours) | Heuristic | Ship only if operator declares policy | Failure is at most `AT RISK`. |
 | Generic validator/participant semantic consistency beyond the offset invariant | Unverifiable | Do not ship | D2 showed green startup on an offset-inconsistent pair. |

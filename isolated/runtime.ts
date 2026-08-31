@@ -1,6 +1,6 @@
 import type { BackupSetInspection } from "../backup-set.js";
 import { compatibility } from "../compatibility.js";
-import { UnsupportedInputError } from "../errors.js";
+import { DrillEnvironmentError, UnsupportedInputError } from "../errors.js";
 import { backupVersionEvidence } from "../versions.js";
 import { runProcess } from "./docker.js";
 
@@ -75,7 +75,7 @@ export async function resolveDrillRuntime(
   try {
     await runner("docker", ["pull", tag]);
   } catch {
-    throw new UnsupportedInputError(
+    throw new DrillEnvironmentError(
       `could not pull participant image for Splice ${spliceVersion}; crv verify still runs fast checks`,
     );
   }
@@ -84,7 +84,7 @@ export async function resolveDrillRuntime(
     ? parseRepoDigests(inspected.stdout, compatibility.runtime.participantImageRepository)
     : null;
   if (participantImage === null) {
-    throw new UnsupportedInputError(
+    throw new DrillEnvironmentError(
       `could not resolve one immutable participant image digest for Splice ${spliceVersion}; crv verify still runs fast checks`,
     );
   }

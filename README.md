@@ -49,7 +49,7 @@ crv verify /backups/latest --config /etc/crv/crv.yaml --json
 
 Report schema: [`docs/report-schema-v1.1.json`](docs/report-schema-v1.1.json).
 Exit codes: `0` MET, `1` AT_RISK, `2` FAILED, `3` INDETERMINATE,
-`64` usage, `65` unsupported input/version, `70` execution error.
+`64` usage, `65` unsupported input/version, `70` drill environment or execution error.
 
 ## Commands
 
@@ -84,17 +84,18 @@ They are not comparable benchmarks.
 
 | Check | Class | What it proves |
 | --- | --- | --- |
-| `backup.required_path` | Proven invariant | A participant/validator DB pair or identities fallback is present. |
+| `backup.required_path` | Proven invariant | A participant/validator DB pair or identities fallback is present; unclassified DB artifacts make this `UNKNOWN`, not `FAIL`. |
 | `artifact.reference_digest` | Proven invariant | Current bytes and sizes equal capture-time manifest references. |
 | `backup.offset_order` | Proven invariant | Validator last-ingested offset does not exceed participant ledger end. |
 | `deployment.selected_identity` | Proven invariant | After an offline drill, the selected DB contains the expected participant identity. |
 | `backup.latest_age` | Recovery prerequisite | Capture age is below an explicitly sourced sequencer horizon. No 30-day constant is assumed. |
 | `network.lsu_path` | Recovery prerequisite | A pre-LSU set has sourced evidence for a usable old physical synchronizer path. |
 | `identities.structure` | Structural validation | The export has required JSON fields, canonical participant ID, strict base64, and required key names. Key bytes are never reported. |
-| Offline restore | Structural validation | SQL restores, participant reaches `SERVING`, identity matches, network is internal, and cleanup leaves no resources. |
+| Offline restore | Structural validation | SQL restores, the participant image healthcheck passes, identity matches, the network is internal, and cleanup is verified absent. |
 
-A structural PASS never upgrades the precondition verdict by itself. Every
-applicable `UNKNOWN` names the exact evidence needed to resolve it.
+A structural PASS never upgrades the precondition verdict by itself. Human output
+prints artifact limitations and remediation for every applicable `UNKNOWN` or
+`FAIL`; each `UNKNOWN` names the exact evidence needed to resolve it.
 
 ## Inputs and versions
 

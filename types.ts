@@ -10,7 +10,8 @@ export type EvidenceClass =
 export type CheckStatus = "PASS" | "FAIL" | "WARN" | "UNKNOWN";
 export type CheckSeverity = "error" | "warning" | "info";
 export type PreconditionsVerdict = "MET" | "AT_RISK" | "FAILED" | "INDETERMINATE";
-export type StructuralStatus = "NOT_RUN" | "PASSED" | "PASSED_UNVERIFIED_VERSION" | "FAILED";
+export type StructuralStatus = "NOT_RUN" | "PASSED" | "PASSED_UNVERIFIED_VERSION" | "FAILED" | "ENVIRONMENT_ERROR";
+export type CleanupStatus = "NOT_RUN" | "VERIFIED_ABSENT" | "VERIFIED_PRESENT" | "COULD_NOT_VERIFY";
 export type VersionObservationStatus = "OBSERVED" | "UNKNOWN";
 export type DrillVersionEvidence = "TESTED" | "UNVERIFIED" | null;
 
@@ -35,7 +36,7 @@ export interface CheckResult extends CheckDefinition {
 }
 
 export type ArtifactFormat = "plain_dump" | "custom_dump" | "cluster_dump" | "identities_json" | "unknown";
-export type ArtifactRole = "participant" | "validator" | "identities" | "cluster" | "unknown";
+export type ArtifactRole = "database" | "participant" | "validator" | "identities" | "cluster" | "unknown";
 export type ArtifactCompression = "none" | "gzip" | "zstd" | "xz" | "bzip2" | "unknown";
 export type BackupSetLayout = "single_artifact" | "per_database" | "cluster" | "identities_only" | "mixed" | "unknown";
 
@@ -62,6 +63,7 @@ export interface ArtifactInspection {
   participantId: string | null;
   identityStructureValid: boolean | null;
   schemaFamilies: string[];
+  unrecognizedOffsetTables: string[];
   offsets: OffsetEvidence[];
   limitations: string[];
 }
@@ -69,9 +71,10 @@ export interface ArtifactInspection {
 export interface StructuralEvidence {
   status: StructuralStatus;
   sqlRestored: boolean | null;
-  participantServing: boolean | null;
+  participantContainerHealthy: boolean | null;
   identityMatched: boolean | null;
   networkIsolated: boolean | null;
+  cleanupStatus: CleanupStatus;
   runtime: {
     spliceVersion: string | null;
     participantImage: string | null;

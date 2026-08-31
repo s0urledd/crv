@@ -46,9 +46,10 @@ export function buildVerificationReport(
     structuralRestore: {
       status: "NOT_RUN",
       sqlRestored: null,
-      participantServing: null,
+      participantContainerHealthy: null,
       identityMatched: null,
       networkIsolated: null,
+      cleanupStatus: "NOT_RUN",
       runtime: { spliceVersion: null, participantImage: null, versionEvidence: null, testedAt: null, evidence: null },
       details: [],
     },

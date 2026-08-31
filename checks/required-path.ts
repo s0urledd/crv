@@ -13,18 +13,36 @@ const definition: CheckDefinition = {
 export function checkRequiredPath(artifacts: ArtifactInspection[]): CheckResult {
   const roles = new Set(artifacts.flatMap((artifact) => artifact.roles));
   const databasePair = roles.has("participant") && roles.has("validator");
+  const databaseArtifacts = artifacts.filter((artifact) => artifact.roles.includes("database"));
   const identities = roles.has("identities");
-  const pass = databasePair || identities;
+  if (databasePair || identities) {
+    return {
+      ...definition,
+      applicable: true,
+      status: "PASS",
+      summary: databasePair
+        ? "Participant and validator database evidence are present."
+        : "An identities fallback artifact is present.",
+      evidence: { databasePair, databaseArtifacts: databaseArtifacts.map((artifact) => artifact.path), identitiesFallback: identities },
+      requiredEvidence: [],
+    };
+  }
+  if (databaseArtifacts.length > 0) {
+    return {
+      ...definition,
+      applicable: true,
+      status: "UNKNOWN",
+      summary: "Database artifacts are present, but a participant and validator pair could not be established.",
+      evidence: { databasePair: false, databaseArtifacts: databaseArtifacts.map((artifact) => artifact.path), identitiesFallback: false },
+      requiredEvidence: ["Identify one participant and one validator database artifact in a capture manifest, or provide dumps with a recognized intrinsic schema."],
+    };
+  }
   return {
     ...definition,
     applicable: true,
-    status: pass ? "PASS" : "FAIL",
-    summary: pass
-      ? databasePair
-        ? "Participant and validator database evidence are present."
-        : "An identities fallback artifact is present."
-      : "Neither a participant/validator database pair nor an identities fallback was found.",
-    evidence: { databasePair, identitiesFallback: identities },
+    status: "FAIL",
+    summary: "No database artifact or identities fallback was found.",
+    evidence: { databasePair: false, databaseArtifacts: [], identitiesFallback: false },
     requiredEvidence: [],
   };
 }

@@ -110,7 +110,7 @@ function parseArtifact(value: unknown, index: number): ManifestArtifact {
   if (!/^[0-9a-f]{64}$/.test(sha256)) throw new UnsupportedInputError(`manifest.artifacts[${index}].sha256 must be lowercase SHA-256`);
   const formats: ArtifactFormat[] = ["plain_dump", "custom_dump", "cluster_dump", "identities_json", "unknown"];
   if (!formats.includes(input.format as ArtifactFormat)) throw new UnsupportedInputError(`manifest.artifacts[${index}].format is unsupported`);
-  const allowedRoles: ArtifactRole[] = ["participant", "validator", "identities", "cluster", "unknown"];
+  const allowedRoles: ArtifactRole[] = ["database", "participant", "validator", "identities", "cluster", "unknown"];
   if (!Array.isArray(input.roles) || input.roles.length === 0 || !input.roles.every((role) => allowedRoles.includes(role as ArtifactRole))) {
     throw new UnsupportedInputError("manifest.artifacts[" + index + "].roles contains an unsupported role");
   }

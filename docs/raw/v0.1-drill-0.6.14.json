@@ -36,7 +36,6 @@
   "structuralRestore": {
     "status": "PASSED_UNVERIFIED_VERSION",
     "sqlRestored": true,
-    "participantServing": true,
     "identityMatched": true,
     "networkIsolated": true,
     "runtime": {
@@ -51,8 +50,10 @@
       "postgresImage=postgres@sha256:156f0b253fd61366d5fc2107ad45955027d5612f695a8436ce20167f3fa79bff",
       "participantImage=ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant@sha256:85ee319f667aabcb9abd36ecbd22279ffeaa2a88fb774195872155b88d6b9137",
       "versionEvidence=UNVERIFIED",
-      "cleanup=verified-no-resources-remain"
-    ]
+      "cleanup=VERIFIED_ABSENT"
+    ],
+    "participantContainerHealthy": true,
+    "cleanupStatus": "VERIFIED_ABSENT"
   },
   "artifacts": [
     {
@@ -76,13 +77,15 @@
       "offsets": [],
       "limitations": [
         "Party hint and successful re-onboarding are not intrinsic to this artifact."
-      ]
+      ],
+      "unrecognizedOffsetTables": []
     },
     {
       "path": "participant.sql",
       "format": "plain_dump",
       "compression": "none",
       "roles": [
+        "database",
         "participant"
       ],
       "sizeBytes": 45530280,
@@ -106,13 +109,15 @@
       ],
       "limitations": [
         "A per-database plain dump does not reliably contain its source database name or capture time."
-      ]
+      ],
+      "unrecognizedOffsetTables": []
     },
     {
       "path": "validator.sql",
       "format": "plain_dump",
       "compression": "none",
       "roles": [
+        "database",
         "validator"
       ],
       "sizeBytes": 164533,
@@ -137,7 +142,8 @@
       ],
       "limitations": [
         "A per-database plain dump does not reliably contain its source database name or capture time."
-      ]
+      ],
+      "unrecognizedOffsetTables": []
     }
   ],
   "checks": [

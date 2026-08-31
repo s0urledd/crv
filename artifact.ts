@@ -7,7 +7,7 @@ import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
-import { offsetRoleForTable, recognizeOffsetShape } from "./compatibility.js";
+import { offsetRoleForTable, offsetShapeCandidatesForColumns, recognizeOffsetShape } from "./compatibility.js";
 import { UnsupportedInputError } from "./errors.js";
 import type {
   ArtifactCompression,
@@ -29,12 +29,13 @@ interface SqlInspection {
   postgresSourceVersion: string | null;
   postgresDumperVersion: string | null;
   schemaFamilies: Set<string>;
-  unrecognizedOffsetShapes: Set<string>;
+  unrecognizedOffsetTables: Set<string>;
   offsets: Map<string, OffsetAccumulator>;
 }
 
 interface CopyState {
-  role: "participant" | "validator";
+  role: "participant" | "validator" | null;
+  table: string;
   columns: string[];
   schemaFamily: string | null;
 }
@@ -52,7 +53,7 @@ function emptySqlInspection(): SqlInspection {
     postgresSourceVersion: null,
     postgresDumperVersion: null,
     schemaFamilies: new Set<string>(),
-    unrecognizedOffsetShapes: new Set<string>(),
+    unrecognizedOffsetTables: new Set<string>(),
     offsets: new Map<string, OffsetAccumulator>(),
   };
 }
@@ -87,9 +88,9 @@ function copyHeader(line: string): CopyState | null {
   if (!match?.[1] || !match[2]) return null;
   const columns = match[2].split(",").map((column) => column.trim());
   const role = offsetRoleForTable(match[1]);
-  if (role === null) return null;
   const recognized = recognizeOffsetShape(match[1], columns);
-  return { role, columns, schemaFamily: recognized?.familyId ?? null };
+  if (role === null && offsetShapeCandidatesForColumns(columns).length === 0) return null;
+  return { role, table: match[1], columns, schemaFamily: recognized?.familyId ?? null };
 }
 
 function consumeSqlLine(
@@ -113,8 +114,8 @@ function consumeSqlLine(
 
   const header = copyHeader(line);
   if (header) {
-    parsed.roles.add(header.role);
-    if (header.schemaFamily === null) parsed.unrecognizedOffsetShapes.add(header.role);
+    if (header.role !== null) parsed.roles.add(header.role);
+    if (header.schemaFamily === null) parsed.unrecognizedOffsetTables.add(header.table);
     else parsed.schemaFamilies.add(header.schemaFamily);
     state.copy = header;
     return;
@@ -123,7 +124,7 @@ function consumeSqlLine(
     state.copy = null;
     return;
   }
-  if (!state.copy || state.copy.schemaFamily === null || line.startsWith("--") || line.length === 0) return;
+  if (!state.copy || state.copy.role === null || state.copy.schemaFamily === null || line.startsWith("--") || line.length === 0) return;
 
   const fields = line.split("\t");
   const entry = offsetEntry(parsed, state.database);
@@ -172,7 +173,7 @@ function mergeSql(target: SqlInspection, source: SqlInspection): void {
   for (const role of source.roles) target.roles.add(role);
   for (const database of source.databases) target.databases.add(database);
   for (const family of source.schemaFamilies) target.schemaFamilies.add(family);
-  for (const role of source.unrecognizedOffsetShapes) target.unrecognizedOffsetShapes.add(role);
+  for (const table of source.unrecognizedOffsetTables) target.unrecognizedOffsetTables.add(table);
   for (const [database, values] of source.offsets) {
     target.offsets.set(database, { ...target.offsets.get(database), ...values });
   }
@@ -311,6 +312,7 @@ async function inspectIdentities(
       participantId: typeof value.id === "string" ? value.id : null,
       identityStructureValid: structure.valid,
       schemaFamilies: [],
+      unrecognizedOffsetTables: [],
       offsets: [],
       limitations: [...structure.errors, "Party hint and successful re-onboarding are not intrinsic to this artifact."],
     };
@@ -338,7 +340,7 @@ async function inspectCustom(
       path: displayPath,
       format: "custom_dump",
       compression,
-      roles: ["unknown"],
+      roles: ["database"],
       sizeBytes,
       sha256: digest,
       sourceDatabase: null,
@@ -350,6 +352,7 @@ async function inspectCustom(
       participantId: null,
       identityStructureValid: null,
       schemaFamilies: [],
+      unrecognizedOffsetTables: [],
       offsets: [],
       limitations,
     };
@@ -366,13 +369,13 @@ async function inspectCustom(
     if (extracted.status === 0 && extracted.stdout) mergeSql(parsed, parseSqlText(extracted.stdout, database));
   }
   if (parsed.roles.size === 0) limitations.push("The archive has no recognized CRV offset table or pg_restore could not extract it.");
-  if (parsed.unrecognizedOffsetShapes.size > 0) limitations.push(`Offset schema shape is not recognized for: ${[...parsed.unrecognizedOffsetShapes].sort().join(", ")}.`);
+  if (parsed.unrecognizedOffsetTables.size > 0) limitations.push(`Unrecognized offset-like table: ${[...parsed.unrecognizedOffsetTables].sort().join(", ")}.`);
 
   return {
     path: displayPath,
     format: "custom_dump",
     compression,
-    roles: parsed.roles.size === 0 ? ["unknown"] : [...parsed.roles],
+    roles: ["database", ...parsed.roles],
     sizeBytes,
     sha256: digest,
     sourceDatabase: database,
@@ -384,6 +387,7 @@ async function inspectCustom(
     participantId: null,
     identityStructureValid: null,
     schemaFamilies: [...parsed.schemaFamilies].sort(),
+    unrecognizedOffsetTables: [...parsed.unrecognizedOffsetTables].sort(),
     offsets: offsetEvidence(parsed),
     limitations,
   };
@@ -410,7 +414,7 @@ async function inspectUncompressed(
     return {
       path: displayPath, format: "unknown", compression, roles: ["unknown"], sizeBytes, sha256: digest,
       sourceDatabase: null, databases: [], postgresSourceVersion: null, postgresDumperVersion: null,
-      archiveCreatedAt: null, spliceVersion: null, participantId: null, identityStructureValid: null, schemaFamilies: [], offsets: [], limitations: ["Artifact format is not recognized."],
+      archiveCreatedAt: null, spliceVersion: null, participantId: null, identityStructureValid: null, schemaFamilies: [], unrecognizedOffsetTables: [], offsets: [], limitations: ["Artifact format is not recognized."],
     };
   }
 
@@ -433,6 +437,7 @@ async function inspectUncompressed(
       participantId: null,
       identityStructureValid: null,
       schemaFamilies: [],
+      unrecognizedOffsetTables: [],
       offsets: [],
       limitations: ["Artifact format is not recognized."],
     };
@@ -442,7 +447,7 @@ async function inspectUncompressed(
     path: displayPath,
     format: parsed.cluster ? "cluster_dump" : "plain_dump",
     compression,
-    roles: parsed.cluster ? ["cluster", ...parsed.roles] : parsed.roles.size === 0 ? ["unknown"] : [...parsed.roles],
+    roles: parsed.cluster ? ["database", "cluster", ...parsed.roles] : ["database", ...parsed.roles],
     sizeBytes,
     sha256: digest,
     sourceDatabase: null,
@@ -454,13 +459,14 @@ async function inspectUncompressed(
     participantId: null,
     identityStructureValid: null,
     schemaFamilies: [...parsed.schemaFamilies].sort(),
+    unrecognizedOffsetTables: [...parsed.unrecognizedOffsetTables].sort(),
     offsets: offsetEvidence(parsed),
     limitations: [
       ...(parsed.cluster
         ? ["A pg_dumpall artifact is sequential, not a cross-database snapshot."]
         : ["A per-database plain dump does not reliably contain its source database name or capture time."]),
-      ...(parsed.unrecognizedOffsetShapes.size > 0
-        ? [`Offset schema shape is not recognized for: ${[...parsed.unrecognizedOffsetShapes].sort().join(", ")}.`]
+      ...(parsed.unrecognizedOffsetTables.size > 0
+        ? [`Unrecognized offset-like table: ${[...parsed.unrecognizedOffsetTables].sort().join(", ")}.`]
         : []),
     ],
   };

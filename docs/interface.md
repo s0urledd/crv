@@ -51,12 +51,12 @@ renders it as `N/A`.
 | 3 | Preconditions `INDETERMINATE` |
 | 64 | Invalid command or arguments |
 | 65 | Unsupported or unrecognised input/version |
-| 70 | Internal or drill execution error |
+| 70 | Drill environment or internal execution error |
 
 `--json` changes only presentation. It never changes checks, verdict, or exit
-code. A `drill` structural failure is represented in `structuralRestore`; it
-must exit at least 2 even if no precondition check failed. Cleanup failure is an
-execution error (70), because isolation can no longer be asserted.
+code. A backup-caused `drill` structural failure is represented in
+`structuralRestore`; it must exit at least 2 even if no precondition check failed.
+Cleanup that leaves resources or cannot be verified is an execution error (70), because isolation can no longer be asserted.
 
 ## Path and mutation rules
 
@@ -90,9 +90,9 @@ Fast inspection enables D2 only for an exact schema family recorded in
 one exact artifact Splice version. Recorded versions use their tested pinned
 digest and may report `PASSED`. Unrecorded versions pull the exact tag, resolve
 and run one immutable digest, and may report `PASSED_UNVERIFIED_VERSION`. Pull or
-digest-resolution failure returns unsupported input while fast `verify` remains
-available. Both passing statuses require SQL restore, participant `SERVING`,
-selected-DB identity equality, network isolation, and verified cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
+digest-resolution failure reports `ENVIRONMENT_ERROR` while fast `verify` remains
+available. Both passing statuses require SQL restore, participant container
+healthcheck success, selected-DB identity equality, network isolation, and verified cleanup. See the recorded [LocalNet CLI drill evidence](raw/v0.1-drill.txt).
 
 ## Watch state
 
