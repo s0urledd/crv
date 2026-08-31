@@ -100,6 +100,7 @@ test("generated report, recorded evidence, and manifest conform to their publish
   }
   for (const name of [
     "v0.1-mainnet-drill-0.6.11.json",
+    "v0.1-mainnet-drill-met-0.6.11.json",
     "v0.1-mainnet-verify-misordered-0.6.11.json",
     "v0.1-ci-drill-0.6.9-schema-1.2.json",
     "v0.1-ci-drill-0.6.11-schema-1.2.json",
