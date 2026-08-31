@@ -14,6 +14,41 @@ except the addition of this file.
 Where a statement below is a behaviour observed in this session it is marked
 **observed**; where it is a repository record it is cited by path.
 
+## Addendum — 2026-08-31, after PR #7 ("Block A")
+
+This report is a dated snapshot of `3a573b7` and is left unedited below.
+[PR #7](https://github.com/s0urledd/crv/pull/7) (merged as `329ffdf`) resolved
+several of its findings; each was re-verified by running the new `main`:
+
+**Resolved by PR #7:** the unrecognised-*table* case now degrades to `UNKNOWN`
+with the table and known families named (§4, previously `FAILED`);
+`artifacts[].limitations` are printed in human output (§3.1 item 2, §6 rows
+2–3); `backup.required_path` gained an `UNKNOWN` middle state, so unclassified
+database artifacts no longer read as "no recovery path" (§6 rows 1–3);
+`participantServing` was renamed `participantContainerHealthy` and the README
+row corrected (§3.2 item 8); cleanup verification is now tri-state and no
+longer reports success when Docker is unreachable (§3.2 item 9); a drill
+environment failure now reports `ENVIRONMENT_ERROR` with exit 70 instead of
+masquerading as a backup failure (§6 row 10); remediation lines are printed
+for `FAIL` and `UNKNOWN` checks.
+
+**Still open as of `329ffdf`:** the compatibility watch's `0.6.*` tag filter
+(§4); exit 70 for user-input errors (§2.2, §6 rows 4 and 9); the README
+transcript, which now diverges further from real output (§3.1); the misplaced
+"identities-only recovery path" wording on non-identities sets;
+`deployment.selected_identity` still has no test and `backup.required_path`
+only its new `UNKNOWN` branch (§3.1 item 5); the failure fixtures still do not
+invoke `crv` and none run in CI (§3.1 item 6); the zstd decoder blast radius,
+declared-database-name narrowing, unused `severity`, and `AT_RISK`
+reachability (§3.2, §6).
+
+**Contract note:** §2.4–2.5 below describe the report schema `1.1` as
+published at `3a573b7`. PR #7 subsequently modified that schema file in place
+(field renames and required additions) while `schemaVersion` remained `"1.1"`,
+so the `1.1` this report analyses and the `1.1` on current `main` are
+different contracts. This is recorded in the post-merge review of PR #7 and is
+not reflected in the body below.
+
 ---
 
 ## 1. Inventory

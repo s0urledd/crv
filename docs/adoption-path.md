@@ -160,6 +160,16 @@ finding behind it.
 Items 1–4 are small. Items 5–6 close a submission gate that currently has no
 window on the timeline.
 
+**Status update (2026-08-31, after PR #7):** item 2 is done (limitations are
+printed); the behaviour half of item 4 is done (an unrecognised table now
+degrades to `UNKNOWN`, matching the version docs) while the README transcript
+remains stale; item 5 is partial (`backup.required_path` gained one test for
+its new `UNKNOWN` branch; `deployment.selected_identity` still has none).
+Items 1, 3 and 6 remain open. PR #7 also fixed two §3-adjacent honesty issues
+beyond this list: drill environment failures now report `ENVIRONMENT_ERROR`
+instead of `FAILED`, and cleanup verification is tri-state instead of
+reporting success when Docker is unreachable.
+
 ### 3.2 Capability additions that raise value per operator
 
 **Read the effective participant DB instead of requiring it to be declared.**
