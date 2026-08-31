@@ -98,6 +98,13 @@ test("generated report, recorded evidence, and manifest conform to their publish
     const raw = JSON.parse(await readFile(fixture("..", "..", "docs", "raw", `v0.1-drill-${version}.json`), "utf8")) as unknown;
     assert.equal(validateReportV11(raw), true, `${version}: ${JSON.stringify(validateReportV11.errors)}`);
   }
+  for (const name of [
+    "v0.1-mainnet-drill-0.6.11.json",
+    "v0.1-mainnet-verify-misordered-0.6.11.json",
+  ]) {
+    const raw = JSON.parse(await readFile(fixture("..", "..", "docs", "raw", name), "utf8")) as unknown;
+    assert.equal(validateReportV12(raw), true, `${name}: ${JSON.stringify(validateReportV12.errors)}`);
+  }
 
   const temporary = await mkdtemp(join(tmpdir(), "crv-schema-"));
   const set = join(temporary, "set");
