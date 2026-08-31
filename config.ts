@@ -16,6 +16,7 @@ export interface CrvConfig {
     scanVersionUrl: string | null;
     sequencerHorizonSeconds: number | null;
     sequencerHorizonSource: string | null;
+    backupAgeWarnFraction: number | null;
     currentPhysicalSynchronizerId: string | null;
     currentPhysicalSynchronizerSerial: number | null;
     capturedPhysicalSynchronizerUsable: boolean | null;
@@ -49,6 +50,9 @@ network:
   sequencerHorizonSeconds: null
   # Versioned documentation URL/reference or network-operator source.
   sequencerHorizonSource: null
+  # Optional warning threshold as a fraction of the sourced horizon (0 < value < 1).
+  # Leave null to disable age warnings; crv assumes no fraction silently.
+  backupAgeWarnFraction: null
   # Current active physical synchronizer evidence from participant admin or Scan.
   currentPhysicalSynchronizerId: null
   currentPhysicalSynchronizerSerial: null
@@ -98,6 +102,14 @@ function nullableInteger(value: unknown, name: string): number | null {
   return value as number;
 }
 
+function nullableFraction(value: unknown, name: string): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value >= 1) {
+    throw new UnsupportedInputError(`${name} must be a number greater than 0 and less than 1, or null`);
+  }
+  return value;
+}
+
 function requiredPositiveInteger(value: unknown, name: string): number {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) throw new UnsupportedInputError(`${name} must be a positive integer`);
   return value as number;
@@ -125,7 +137,7 @@ export async function loadConfig(path: string): Promise<CrvConfig> {
   const watch = object(root.watch ?? {}, "config.watch");
   keys(deployment, ["participantDatabase", "validatorDatabase", "expectedParticipantId"], "config.deployment");
   keys(network, [
-    "scanVersionUrl", "sequencerHorizonSeconds", "sequencerHorizonSource", "currentPhysicalSynchronizerId",
+    "scanVersionUrl", "sequencerHorizonSeconds", "sequencerHorizonSource", "backupAgeWarnFraction", "currentPhysicalSynchronizerId",
     "currentPhysicalSynchronizerSerial", "capturedPhysicalSynchronizerUsable",
     "capturedPhysicalSynchronizerUsabilitySource",
   ], "config.network");
@@ -145,6 +157,7 @@ export async function loadConfig(path: string): Promise<CrvConfig> {
       scanVersionUrl: nullableHttpUrl(network.scanVersionUrl, "config.network.scanVersionUrl"),
       sequencerHorizonSeconds: nullableInteger(network.sequencerHorizonSeconds, "config.network.sequencerHorizonSeconds"),
       sequencerHorizonSource: nullableString(network.sequencerHorizonSource, "config.network.sequencerHorizonSource"),
+      backupAgeWarnFraction: nullableFraction(network.backupAgeWarnFraction, "config.network.backupAgeWarnFraction"),
       currentPhysicalSynchronizerId: nullableString(network.currentPhysicalSynchronizerId, "config.network.currentPhysicalSynchronizerId"),
       currentPhysicalSynchronizerSerial: nullableInteger(network.currentPhysicalSynchronizerSerial, "config.network.currentPhysicalSynchronizerSerial"),
       capturedPhysicalSynchronizerUsable: (usable as boolean | null | undefined) ?? null,
