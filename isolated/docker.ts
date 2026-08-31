@@ -102,8 +102,10 @@ export class DrillResources {
   }
 
   async cleanup(): Promise<CleanupStatus> {
+    // Docker refuses to remove a network while a container is still attached.
+    // Remove containers first, then independent network and volume resources.
+    await runProcess("docker", ["rm", "-f", "-v", this.participant, this.postgres], true).catch(() => undefined);
     await Promise.allSettled([
-      runProcess("docker", ["rm", "-f", "-v", this.participant, this.postgres], true),
       runProcess("docker", ["network", "rm", this.network], true),
       runProcess("docker", ["volume", "rm", "-f", this.volume], true),
     ]);
