@@ -54,6 +54,12 @@
         "postgresMajor": 14,
         "testedAt": "2026-08-31",
         "evidence": "https://github.com/s0urledd/crv/actions/runs/33391920291"
+      },
+      "0.7.5": {
+        "participantImage": "ghcr.io/digital-asset/decentralized-canton-sync/docker/canton-participant@sha256:9cfa64727b024686700cc1ad90aa01ae19b58ac8026149a61cd780750b3a1b97",
+        "postgresMajor": 14,
+        "testedAt": "2026-08-31",
+        "evidence": "https://github.com/s0urledd/crv/actions/runs/33413098052"
       }
     },
     "participantStartupTimeoutSeconds": 240

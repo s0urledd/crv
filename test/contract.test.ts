@@ -106,6 +106,7 @@ test("generated report, recorded evidence, and manifest conform to their publish
     "v0.1-ci-drill-0.6.9-schema-1.2.json",
     "v0.1-ci-drill-0.6.11-schema-1.2.json",
     "v0.1-ci-drill-0.6.14-schema-1.2.json",
+    "v0.1-ci-drill-0.7.5-schema-1.2.json",
   ]) {
     const raw = JSON.parse(await readFile(fixture("..", "..", "docs", "raw", name), "utf8")) as unknown;
     assert.equal(validateReportV12(raw), true, `${name}: ${JSON.stringify(validateReportV12.errors)}`);
