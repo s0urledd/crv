@@ -18,6 +18,39 @@ interface Candidate {
   migrationId?: string;
 }
 
+export interface DeclaredCaptureOrder {
+  validatorCompletedAt: string | null;
+  participantStartedAt: string | null;
+}
+
+interface CaptureOrderContext {
+  evidence: Record<string, string | boolean | string[]>;
+  limitation: string | null;
+}
+
+function captureOrderContext(declared: DeclaredCaptureOrder | null): CaptureOrderContext {
+  if (declared === null || declared.validatorCompletedAt === null || declared.participantStartedAt === null) {
+    return { evidence: {}, limitation: null };
+  }
+  const weakensGuarantee = Date.parse(declared.participantStartedAt) < Date.parse(declared.validatorCompletedAt);
+  const limitation = weakensGuarantee
+    ? "Declared capture order weakens the guarantee because participant capture started before the validator dump completed."
+    : null;
+  return {
+    evidence: {
+      validatorCompletedAt: declared.validatorCompletedAt,
+      participantStartedAt: declared.participantStartedAt,
+      participantStartedBeforeValidatorCompleted: weakensGuarantee,
+      ...(limitation === null ? {} : { limitations: [limitation] }),
+    },
+    limitation,
+  };
+}
+
+function withCaptureOrderLimitation(summary: string, context: CaptureOrderContext): string {
+  return context.limitation === null ? summary : summary + " " + context.limitation;
+}
+
 function candidates(
   artifacts: ArtifactInspection[],
   key: "participantLedgerEnd" | "validatorLastIngested",
@@ -53,7 +86,9 @@ export function checkOffsetOrder(
   artifacts: ArtifactInspection[],
   participantDatabase: string | null = null,
   validatorDatabase: string | null = null,
+  declaredCaptureOrder: DeclaredCaptureOrder | null = null,
 ): CheckResult {
+  const captureOrder = captureOrderContext(declaredCaptureOrder);
   const participant = candidates(artifacts, "participantLedgerEnd", participantDatabase);
   const validator = candidates(artifacts, "validatorLastIngested", validatorDatabase);
   const hasDatabaseRole = artifacts.some(
@@ -85,9 +120,9 @@ export function checkOffsetOrder(
       ...definition,
       applicable: true,
       status: "UNKNOWN",
-      summary: unrecognizedTables.length > 0
+      summary: withCaptureOrderLimitation(unrecognizedTables.length > 0
         ? "Offset ordering is unknown because offset-like table(s) " + unrecognizedTables.join(", ") + " do not match known schema families " + knownFamilies.join(", ") + "."
-        : "Exactly one participant ledger end and one validator offset could not be selected.",
+        : "Exactly one participant ledger end and one validator offset could not be selected.", captureOrder),
       evidence: {
         participantCandidates: participant.length,
         validatorCandidates: validator.length,
@@ -95,6 +130,7 @@ export function checkOffsetOrder(
         selectedValidatorDatabase: validatorDatabase,
         unrecognizedOffsetTables: unrecognizedTables,
         knownSchemaFamilies: knownFamilies,
+        ...captureOrder.evidence,
       },
       requiredEvidence: requirements,
     };
@@ -108,15 +144,16 @@ export function checkOffsetOrder(
     ...definition,
     applicable: true,
     status: failed ? "FAIL" : "PASS",
-    summary: failed
+    summary: withCaptureOrderLimitation(failed
       ? `Validator offset ${validatorValue.value} exceeds participant ledger end ${participantValue.value}.`
-      : `Validator offset ${validatorValue.value} does not exceed participant ledger end ${participantValue.value}.`,
+      : `Validator offset ${validatorValue.value} does not exceed participant ledger end ${participantValue.value}.`, captureOrder),
     evidence: {
       participant: candidateEvidence(participantValue),
       validator: candidateEvidence(validatorValue),
       relation: failed ? ">" : "<=",
       selectedParticipantDatabase: participantDatabase,
       selectedValidatorDatabase: validatorDatabase,
+      ...captureOrder.evidence,
     },
     requiredEvidence: [],
   };

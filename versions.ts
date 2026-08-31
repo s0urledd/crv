@@ -2,29 +2,39 @@ import type { BackupSetInspection } from "./backup-set.js";
 import type { CrvConfig } from "./config.js";
 import type { VersionObservation } from "./types.js";
 
+export interface BackupVersionEvidenceEntry {
+  value: string;
+  source: string;
+}
+
 export interface BackupVersionEvidence {
+  entries: BackupVersionEvidenceEntry[];
   values: string[];
-  sources: string[];
+}
+
+export function formatBackupVersionEvidence(entries: BackupVersionEvidenceEntry[]): string {
+  return entries.map((entry) => `${entry.value} (${entry.source})`).join(", ");
 }
 
 export function backupVersionEvidence(set: BackupSetInspection): BackupVersionEvidence {
-  const values = new Set<string>();
-  const sources = new Set<string>();
+  const entries: BackupVersionEvidenceEntry[] = [];
   const declared = set.manifest?.declared.spliceVersion;
-  if (declared) {
-    values.add(declared);
-    sources.add("manifest.declared.spliceVersion");
-  }
+  if (declared) entries.push({ value: declared, source: "manifest.declared.spliceVersion" });
   for (const artifact of set.artifacts) {
     if (!artifact.spliceVersion) continue;
-    values.add(artifact.spliceVersion);
-    sources.add(`artifact:${artifact.path}`);
+    entries.push({ value: artifact.spliceVersion, source: `artifact:${artifact.path}` });
   }
-  return { values: [...values].sort(), sources: [...sources].sort() };
+  const unique = [...new Map(entries.map((entry) => [`${entry.value}\u0000${entry.source}`, entry])).values()]
+    .sort((left, right) => left.value.localeCompare(right.value) || left.source.localeCompare(right.source));
+  return {
+    entries: unique,
+    values: [...new Set(unique.map((entry) => entry.value))],
+  };
 }
 
 export function observeBackupVersion(set: BackupSetInspection): VersionObservation {
   const evidence = backupVersionEvidence(set);
+  const sources = [...new Set(evidence.entries.map((entry) => entry.source))];
   if (evidence.values.length === 0) {
     return {
       status: "UNKNOWN",
@@ -38,15 +48,15 @@ export function observeBackupVersion(set: BackupSetInspection): VersionObservati
     return {
       status: "UNKNOWN",
       value: null,
-      source: evidence.sources.join(", "),
+      source: sources.join(", "),
       commitTs: null,
-      detail: `Conflicting backup-set versions: ${evidence.values.join(", ")}.`,
+      detail: `Conflicting backup-set versions: ${formatBackupVersionEvidence(evidence.entries)}.`,
     };
   }
   return {
     status: "OBSERVED",
     value: evidence.values[0] ?? null,
-    source: evidence.sources.join(", "),
+    source: sources.join(", "),
     commitTs: null,
     detail: "One exact backup-set Splice version was observed.",
   };
