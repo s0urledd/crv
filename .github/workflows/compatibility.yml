@@ -40,9 +40,9 @@ jobs:
       - name: Verify newest compatibility
         run: |
           if [[ -n "$REQUESTED_VERSION" ]]; then
-            ./experiments/09-compatibility-watch.sh "$REQUESTED_VERSION"
+            ./scripts/compatibility-watch.sh "$REQUESTED_VERSION"
           else
-            ./experiments/09-compatibility-watch.sh
+            ./scripts/compatibility-watch.sh
           fi
       - name: Upload reviewed compatibility candidate
         if: success()
@@ -55,7 +55,7 @@ jobs:
         if: always()
         run: |
           if [[ -d .crv-bench/cn-quickstart/.git ]]; then
-            ./experiments/stop.sh || true
+            ./scripts/stop.sh || true
           fi
           docker ps -aq --filter label=crv.run | xargs -r docker rm -f
           docker network ls -q --filter label=crv.run | xargs -r docker network rm

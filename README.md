@@ -190,15 +190,15 @@ availability, recovery of multi-hosted/external parties, or complete
 validator-app/participant semantic consistency beyond the offset invariant.
 Do not translate `MET` or structural `PASSED` into `RECOVERABLE`.
 
-Read the evidence in [`docs/discovery.md`](docs/discovery.md) and reproduce the
-CLI drill with [`experiments/08-cli-drill.sh`](experiments/08-cli-drill.sh).
+Evidence records live under [`docs/raw/`](docs/raw/); reproduce the claims with
+[`./scripts/reviewer-repro.sh`](scripts/reviewer-repro.sh).
 
 ## Reproduce the claims
 
 From a fresh clone, run:
 
 ```sh
-./experiments/00-reviewer-repro.sh
+./scripts/reviewer-repro.sh
 ```
 
 It installs dependencies, builds, runs the tests and CLI contracts, prints the
@@ -208,9 +208,8 @@ summary marks only that drill `SKIPPED`.
 
 ## Maintenance
 
-crv is maintained by the operators of a Canton Network MainNet validator.
-Engineering is AI-assisted; every change is human-reviewed, and behavior
-claims are validated on production infrastructure before release. Files under
-`docs/raw/` are unedited records of real runs.
+crv is maintained by Huginn Tech, operators of a Canton Network MainNet
+validator. Behavior claims are validated on production infrastructure before
+release; files under docs/raw/ are unedited records of real runs.
 
 License: MIT.

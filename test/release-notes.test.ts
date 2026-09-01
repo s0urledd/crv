@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 test("release notes are generated from compatibility data", () => {
-  const result = spawnSync(process.execPath, ["experiments/render-release-notes.mjs", "--check"], {
+  const result = spawnSync(process.execPath, ["scripts/render-release-notes.mjs", "--check"], {
     cwd: process.cwd(),
     encoding: "utf8",
   });

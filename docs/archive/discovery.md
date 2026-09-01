@@ -42,7 +42,7 @@ The reference documentation was pinned to
 That newer source was deliberately read as well because migration-ID behavior
 changed within the requested `0.6.x` range.
 
-Run the experiments from [experiments/README.md](../experiments/README.md).
+Run the archived scripts from [experiments/README.md](experiments/README.md).
 Each failure-catalogue entry has a one-command wrapper. The scripts create only
 disposable Docker resources and use an internal network for restored nodes.
 
@@ -90,7 +90,7 @@ application databases plus `postgres`; all were owned by `cnadmin`. Relevant
 names were `validator-app-provider` and `participant-app-provider`. PostgreSQL
 was 14.24. A plain validator dump was 167,984 bytes and took 0.42 s; the
 participant dump was 45,577,111 bytes and took 0.80 s. These are bench sizing
-observations, not production estimates. [Raw output](raw/d1-backup-shape.txt).
+observations, not production estimates. [Raw output](../raw/d1-backup-shape.txt).
 
 **from documentation.** Production compose naming is version-dependent. Older
 deployments select `participant-<migration_id>`. In Splice 0.6.14, `start.sh`
@@ -201,7 +201,7 @@ and `000000000000000042` from the greatest
 migration represented by that table. The artifact-only comparison reported
 `FAIL` because 66 is greater than 65. The known post-t1 contract also appeared
 twice in the validator artifact and zero times in the participant artifact.
-[Raw output](raw/d2-ordering.txt).
+[Raw output](../raw/d2-ordering.txt).
 
 The intrinsic invariant is:
 
@@ -262,7 +262,7 @@ not a live measurement. `crv` may accept it only as an explicitly selected,
 versioned documentation-policy input; it must not silently hardcode it. Without
 a trusted policy or network-operator input, this check is `UNKNOWN`.
 
-[Raw source search](raw/d3-retention-source-search.txt).
+[Raw source search](../raw/d3-retention-source-search.txt).
 
 Participant pruning schedule is rendered by the validator Helm chart as
 `participant-pruning-schedule { cron, max-duration, retention }`; it is derived
@@ -294,7 +294,7 @@ offsets and stayed healthy. In a second test, a participant dump was restored
 to `participant-0` while the participant was configured to select empty
 `participant-1`. The participant health endpoint became green, but the selected
 DB had no node identity and `participant.id` reported that the node was not
-initialized. [Raw output](raw/d4-migration-and-db-selection.txt).
+initialized. [Raw output](../raw/d4-migration-and-db-selection.txt).
 
 Conclusion: do not ship the obsolete rule “current migration ID must equal the
 number in the participant DB name.” Ship the stronger **Proven invariant**:
@@ -331,7 +331,7 @@ the same participant ID as the LocalNet identities dump. The
 `exit-on-fatal-failures` override was not needed for this healthy fixture.
 The clean reproduction script took 23 seconds end to end. Participant DB size
 was 31 MB; observed memory was about 860 MiB for participant and 329 MiB for
-PostgreSQL. [Raw output](raw/d5-isolated-restore.txt).
+PostgreSQL. [Raw output](../raw/d5-isolated-restore.txt).
 
 Minimum environment: PostgreSQL plus participant. The validator app is not
 needed for structural restore and identity. Adding it did not create a generic
@@ -402,7 +402,7 @@ read-only `GET /api/validator/v0/admin/participant/identities`.
 **tested on LocalNet.** The generated JSON was 2,177 bytes with keys
 `authorizedStoreSnapshot`, `id`, `keys`, and `version`; it held three named
 base64 key pairs, a decodable topology snapshot, a `PAR` participant ID, and
-version `0.6.11`. It did not contain a party hint. [Raw output](raw/d6-identities.txt).
+version `0.6.11`. It did not contain a party hint. [Raw output](../raw/d6-identities.txt).
 
 Offline checks can prove JSON/schema/base64 readability, required non-empty
 fields, participant namespace shape, and equality with a participant identity
@@ -434,8 +434,8 @@ verification into recovery orchestration. It does not belong in `crv` v0.1.
 | Missing identities | Required recovery path absent. | Set completeness fails only when no valid DB path exists. |
 | 31-day-old backup | **Simulated timestamp arithmetic only.** | Age comparison fails against a sourced 30-day declared horizon; no claim about LocalNet pruning. |
 
-[Raw catalogue output](raw/d7-failures.txt). Each row has a script under
-`experiments/failures/`. The scripts generate artifacts at runtime; no large
+[Raw catalogue output](../raw/d7-failures.txt). Each row has a script under
+`docs/archive/experiments/failures/`. The scripts generate artifacts at runtime; no large
 dumps or private fixture keys are committed.
 
 ## D8. Helm parity

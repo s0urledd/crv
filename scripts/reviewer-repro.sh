@@ -10,7 +10,7 @@ bench_started=false
 cleanup() {
   rm -rf -- "$work"
   if [[ "$bench_started" == true && -d .crv-bench/cn-quickstart/.git ]]; then
-    ./experiments/stop.sh >/dev/null 2>&1 || true
+    ./scripts/stop.sh >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -40,8 +40,8 @@ run_fixture() {
 npm ci
 npm run build
 npm test
-./experiments/10-cli-failure-contracts.sh
-node experiments/render-release-notes.mjs --check
+./scripts/failure-contracts.sh
+node scripts/render-release-notes.mjs --check
 
 run_fixture test/fixtures/good 3 INDETERMINATE "$work/good.json"
 run_fixture test/fixtures/reversed 2 FAILED "$work/reversed.json"
@@ -50,7 +50,7 @@ if command -v docker >/dev/null 2>&1 \
   && docker info >/dev/null 2>&1 \
   && docker compose version >/dev/null 2>&1; then
   bench_started=true
-  CRV_IMAGE_TAG="${CRV_REVIEWER_SPLICE_VERSION:-0.7.5}" ./experiments/08-cli-drill.sh
+  CRV_IMAGE_TAG="${CRV_REVIEWER_SPLICE_VERSION:-0.7.5}" ./scripts/drill-bench.sh
   drill_status="RAN (${CRV_REVIEWER_SPLICE_VERSION:-0.7.5})"
 fi
 
