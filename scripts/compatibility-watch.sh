@@ -51,7 +51,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-CRV_IMAGE_TAG="$latest" CRV_DRILL_REPORT_PATH="$report" ./experiments/08-cli-drill.sh
+CRV_IMAGE_TAG="$latest" CRV_DRILL_REPORT_PATH="$report" ./scripts/drill-bench.sh
 status=$(jq -r '.structuralRestore.status' "$report")
 d2_status=$(jq -r '[.checks[] | select(.id == "backup.offset_order")][0].status // "MISSING"' "$report")
 if [[ "$d2_status" != PASS ]]; then
@@ -75,7 +75,7 @@ if [[ "$recorded" == true ]]; then
 fi
 
 tested_at=$(date -u +%F)
-evidence=${CRV_COMPAT_EVIDENCE_URL:-local:experiments/09-compatibility-watch.sh}
+evidence=${CRV_COMPAT_EVIDENCE_URL:-local:scripts/compatibility-watch.sh}
 postgres_major=$(jq -r '.runtime.postgresMajor' compatibility.json)
 jq --arg version "$latest" --arg image "$participant_image" --arg tested_at "$tested_at" \
   --arg evidence "$evidence" --argjson postgres_major "$postgres_major" \

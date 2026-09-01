@@ -65,14 +65,14 @@ jobs:
       - name: Reproduce release claims
         env:
           CRV_REVIEWER_SPLICE_VERSION: "0.7.5"
-        run: ./experiments/00-reviewer-repro.sh
+        run: ./scripts/reviewer-repro.sh
       - name: Capture diagnostics
         if: failure()
         run: |
           mkdir -p ci-artifacts
           docker ps -a --no-trunc >ci-artifacts/docker-ps.txt
           if [[ -d .crv-bench/cn-quickstart/.git ]]; then
-            source experiments/lib/bench.sh
+            source scripts/lib/bench.sh
             compose_bench ps --all >ci-artifacts/bench-ps.txt 2>&1 || true
             compose_bench logs --no-color >ci-artifacts/bench.log 2>&1 || true
           fi
@@ -88,7 +88,7 @@ jobs:
         if: always()
         run: |
           if [[ -d .crv-bench/cn-quickstart/.git ]]; then
-            ./experiments/stop.sh || true
+            ./scripts/stop.sh || true
           fi
           docker ps -aq --filter label=crv.run | xargs -r docker rm -f
           docker network ls -q --filter label=crv.run | xargs -r docker network rm
@@ -121,7 +121,7 @@ jobs:
       - name: Run isolated restore against LocalNet artifacts
         run: |
           mkdir -p ci-evidence
-          CRV_DRILL_REPORT_PATH="ci-evidence/v0.1-ci-drill-${CRV_IMAGE_TAG}-schema-1.2.json" ./experiments/08-cli-drill.sh
+          CRV_DRILL_REPORT_PATH="ci-evidence/v0.1-ci-drill-${CRV_IMAGE_TAG}-schema-1.2.json" ./scripts/drill-bench.sh
           expected_status=PASSED
           if ! jq -e --arg version "$CRV_IMAGE_TAG" '.runtime.drillEvidence[$version] != null' compatibility.json >/dev/null; then
             expected_status=PASSED_UNVERIFIED_VERSION
@@ -142,7 +142,7 @@ jobs:
           docker network ls >ci-artifacts/docker-networks.txt
           docker volume ls >ci-artifacts/docker-volumes.txt
           if [[ -d .crv-bench/cn-quickstart/.git ]]; then
-            source experiments/lib/bench.sh
+            source scripts/lib/bench.sh
             compose_bench ps --all >ci-artifacts/bench-ps.txt 2>&1 || true
             compose_bench logs --no-color >ci-artifacts/bench.log 2>&1 || true
           fi
@@ -158,7 +158,7 @@ jobs:
         if: always()
         run: |
           if [[ -d .crv-bench/cn-quickstart/.git ]]; then
-            ./experiments/stop.sh || true
+            ./scripts/stop.sh || true
           fi
           docker ps -aq --filter label=crv.run | xargs -r docker rm -f
           docker network ls -q --filter label=crv.run | xargs -r docker network rm
@@ -180,4 +180,4 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Exercise built CLI failure paths
-        run: ./experiments/10-cli-failure-contracts.sh
+        run: ./scripts/failure-contracts.sh

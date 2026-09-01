@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$(dirname "$0")/lib/bench.sh"
+source "$(dirname "$0")/../../../scripts/lib/bench.sh"
 
 start_bench
 work=$(mktemp -d)
