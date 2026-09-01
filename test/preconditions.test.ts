@@ -54,7 +54,12 @@ test("age uses supplied horizon and fails at the boundary", async () => {
   const settings = config();
   settings.network.sequencerHorizonSeconds = 3600;
   settings.network.sequencerHorizonSource = "network-operator-policy-2026-08";
-  assert.equal(checkBackupAge([artifact], capture, settings, new Date("2026-08-29T00:59:59.000Z")).status, "PASS");
+  const passing = checkBackupAge([artifact], capture, settings, new Date("2026-08-29T00:59:59.000Z"));
+  assert.equal(passing.status, "PASS");
+  assert.equal(passing.evidence.horizonSourceValidated, false);
+  assert.match(passing.proves, /operator-declared.*does not validate/);
+  assert.match(passing.method, /operator-declared, unvalidated/);
+  assert.match(passing.summary, /operator-declared.*does not validate its source/);
   assert.equal(checkBackupAge([artifact], capture, settings, new Date("2026-08-29T01:00:00.000Z")).status, "FAIL");
 });
 
@@ -104,8 +109,15 @@ test("LSU passes matching identity and requires sourced usability after a change
   settings.network.currentPhysicalSynchronizerId = "sync-new";
   settings.network.currentPhysicalSynchronizerSerial = 2;
   assert.equal(checkLsuPath([artifact], capture, settings).status, "UNKNOWN");
-  settings.network.capturedPhysicalSynchronizerUsable = false;
   settings.network.capturedPhysicalSynchronizerUsabilitySource = "network-operator-incident-42";
+  settings.network.capturedPhysicalSynchronizerUsable = true;
+  const passing = checkLsuPath([artifact], capture, settings);
+  assert.equal(passing.status, "PASS");
+  assert.equal(passing.evidence.usabilitySourceValidated, false);
+  assert.match(passing.proves, /operator-declared.*does not validate/);
+  assert.match(passing.method, /operator-declared.*without validating/);
+  assert.match(passing.summary, /operator-declared, unvalidated assertion.*remains usable/);
+  settings.network.capturedPhysicalSynchronizerUsable = false;
   assert.equal(checkLsuPath([artifact], capture, settings).status, "FAIL");
 });
 

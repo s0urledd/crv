@@ -97,6 +97,10 @@ be greater than 0 and less than 1. When configured, an age strictly above that
 fraction of the sourced horizon is `WARN`, so otherwise-complete preconditions
 become `AT_RISK` and exit 1. Equality remains `PASS`; null disables the warning
 and crv assumes no threshold.
+`sequencerHorizonSource` and
+`capturedPhysicalSynchronizerUsabilitySource` are operator-declared strings.
+crv records them but does not validate their authority or contents; report
+evidence explicitly marks the corresponding source validation as `false`.
 
 `network.scanVersionUrl` is optional; when absent, verification stays offline.
 When configured, an unavailable or malformed public
