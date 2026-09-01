@@ -11,19 +11,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# D3/D4 network inputs are source-verified for the pinned discovery release.
-# Keep this conditional until the same endpoint contract is checked on every
-# version in the drill matrix.
-if [[ "$CRV_IMAGE_TAG" == "0.6.11" ]]; then
-  active_serial=$(docker exec splice wget -qO- \
-    http://127.0.0.1:5012/api/scan/v0/active-synchronizer-serial)
-  dso_sequencers=$(docker exec splice wget -qO- \
-    http://127.0.0.1:5012/api/scan/v0/dso-sequencers)
-  printf '%s' "$active_serial" | jq -e '.serial | type == "number"' >/dev/null
-  printf '%s' "$dso_sequencers" | jq -e \
-    '.domainSequencers | type == "array" and length > 0 and all(.[]; .domainId | type == "string" and length > 0)' >/dev/null
-  printf '%s\n' 'lsu_scan_inputs=verified'
-fi
+active_serial=$(docker exec splice wget -qO- \
+  http://127.0.0.1:5012/api/scan/v0/active-synchronizer-serial)
+dso_sequencers=$(docker exec splice wget -qO- \
+  http://127.0.0.1:5012/api/scan/v0/dso-sequencers)
+printf '%s' "$active_serial" | jq -e '.serial | type == "number"' >/dev/null
+printf '%s' "$dso_sequencers" | jq -e \
+  '.domainSequencers | type == "array" and length > 0 and all(.[]; .domainId | type == "string" and length > 0)' >/dev/null
+printf 'lsu_scan_inputs=verified version=%s\n' "$CRV_IMAGE_TAG"
 
 docker exec postgres pg_dump -U cnadmin participant-app-provider >"$work/participant.sql"
 docker exec postgres pg_dump -U cnadmin validator-app-provider >"$work/validator.sql"

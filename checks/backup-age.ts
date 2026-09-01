@@ -25,6 +25,7 @@ export function checkBackupAge(
   const completedAt = manifest?.declared.captureCompletedAt ?? null;
   const horizon = config?.network.sequencerHorizonSeconds ?? null;
   const source = config?.network.sequencerHorizonSource ?? null;
+  const warnFraction = config?.network.backupAgeWarnFraction ?? null;
   const requiredEvidence: string[] = [];
   if (completedAt === null) requiredEvidence.push("Supply the participant capture completion time in a manifest.");
   if (horizon === null || source === null) requiredEvidence.push("Supply the effective sequencer retention horizon and its source; CRV does not silently assume 30 days.");
@@ -54,13 +55,38 @@ export function checkBackupAge(
   }
   const ageSeconds = Math.max(0, rawAgeSeconds);
   const failed = ageSeconds >= horizon;
+  const warningThresholdSeconds = warnFraction === null ? null : warnFraction * horizon;
+  const warned = !failed && warningThresholdSeconds !== null && ageSeconds > warningThresholdSeconds;
+  if (failed) {
+    return {
+      ...definition,
+      applicable: true,
+      status: "FAIL",
+      summary: `Backup age ${Math.floor(ageSeconds)}s is not below the sourced ${horizon}s sequencer horizon.`,
+      evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds, horizonSeconds: horizon, horizonSource: source },
+      requiredEvidence: [],
+    };
+  }
+  if (warned) {
+    return {
+      ...definition,
+      applicable: true,
+      status: "WARN",
+      summary: `Backup age ${Math.floor(ageSeconds)}s is below the sourced ${horizon}s sequencer horizon but exceeds the configured ${warnFraction} warning fraction (${Math.floor(warningThresholdSeconds)}s; config.network.backupAgeWarnFraction).`,
+      evidence: {
+        captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds,
+        horizonSeconds: horizon, horizonSource: source, warnFraction,
+        warnThresholdSeconds: warningThresholdSeconds,
+        warnFractionSource: "config.network.backupAgeWarnFraction",
+      },
+      requiredEvidence: [],
+    };
+  }
   return {
     ...definition,
     applicable: true,
-    status: failed ? "FAIL" : "PASS",
-    summary: failed
-      ? `Backup age ${Math.floor(ageSeconds)}s is not below the sourced ${horizon}s sequencer horizon.`
-      : `Backup age ${Math.floor(ageSeconds)}s is below the sourced ${horizon}s sequencer horizon.`,
+    status: "PASS",
+    summary: `Backup age ${Math.floor(ageSeconds)}s is below the sourced ${horizon}s sequencer horizon.`,
     evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds, horizonSeconds: horizon, horizonSource: source },
     requiredEvidence: [],
   };

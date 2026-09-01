@@ -18,6 +18,7 @@ function config(scanVersionUrl: string | null): CrvConfig {
       scanVersionUrl,
       sequencerHorizonSeconds: null,
       sequencerHorizonSource: null,
+      backupAgeWarnFraction: null,
       currentPhysicalSynchronizerId: null,
       currentPhysicalSynchronizerSerial: null,
       capturedPhysicalSynchronizerUsable: null,

@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        splice-version: ["0.6.9", "0.6.11", "0.6.14"]
+        splice-version: ["0.6.9", "0.6.11", "0.6.14", "0.7.5"]
     env:
       CRV_IMAGE_TAG: ${{ matrix.splice-version }}
     steps:
@@ -73,7 +73,11 @@ jobs:
         run: |
           mkdir -p ci-evidence
           CRV_DRILL_REPORT_PATH="ci-evidence/v0.1-ci-drill-${CRV_IMAGE_TAG}-schema-1.2.json" ./experiments/08-cli-drill.sh
-          jq -e '.schemaVersion == "1.2" and .structuralRestore.status == "PASSED" and .structuralRestore.identityMatched == true' "ci-evidence/v0.1-ci-drill-${CRV_IMAGE_TAG}-schema-1.2.json" >/dev/null
+          expected_status=PASSED
+          if ! jq -e --arg version "$CRV_IMAGE_TAG" '.runtime.drillEvidence[$version] != null' compatibility.json >/dev/null; then
+            expected_status=PASSED_UNVERIFIED_VERSION
+          fi
+          jq -e --arg expected "$expected_status" '.schemaVersion == "1.2" and .structuralRestore.status == $expected and .structuralRestore.identityMatched == true' "ci-evidence/v0.1-ci-drill-${CRV_IMAGE_TAG}-schema-1.2.json" >/dev/null
       - name: Upload drill evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

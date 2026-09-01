@@ -32,6 +32,10 @@ remains available.
 specific runtime execution passed but CRV has not yet retained repeatable
 release evidence in `compatibility.json`.
 
+Recorded runtime evidence currently covers 0.6.9, 0.6.11, 0.6.14, and 0.7.5.
+Each compatibility entry pins the participant image digest and links the CI run
+that minted its repeatable evidence.
+
 ## Network version
 
 Verification is offline by default. An operator may configure the public
