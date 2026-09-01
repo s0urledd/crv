@@ -1,6 +1,6 @@
 {
   "name": "crv",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0",
   "description": "Canton validator recovery-precondition verifier",
   "license": "MIT",
   "type": "module",
