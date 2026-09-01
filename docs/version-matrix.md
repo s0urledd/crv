@@ -56,5 +56,4 @@ adapter and does not predict drill success.
 - `canton-network/splice` release tags and
   `apps/common/src/main/resources/db/migration/canton-network/postgres/stable/V001__create_schema.sql`.
 - Runtime evidence in `compatibility.json` and the linked CI run.
-- Source scan: [`experiments/07-version-matrix.sh`](../experiments/07-version-matrix.sh)
-  and [recorded output](raw/v1-version-matrix.txt).
+- Recorded source scan: [version matrix output](raw/v1-version-matrix.txt).
