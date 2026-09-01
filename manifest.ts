@@ -61,9 +61,40 @@ function nullableString(value: unknown, name: string): string | null {
   return value;
 }
 
+const RFC3339_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
+
+export function parseRfc3339DateTime(value: string): number | null {
+  const match = value.match(RFC3339_DATE_TIME);
+  if (match === null) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = Number(match[7] ?? 0);
+  const offsetMinute = Number(match[8] ?? 0);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const maximumDay = daysInMonth[month - 1] ?? 0;
+  if (
+    month < 1 || month > 12 ||
+    day < 1 || day > maximumDay ||
+    hour > 23 || minute > 59 || second > 60 ||
+    offsetHour > 23 || offsetMinute > 59
+  ) return null;
+
+  const normalized = second === 60 ? `${value.slice(0, 17)}59${value.slice(19)}` : value;
+  const milliseconds = Date.parse(normalized);
+  return Number.isFinite(milliseconds) ? milliseconds + (second === 60 ? 1000 : 0) : null;
+}
+
 function nullableDate(value: unknown, name: string): string | null {
   const parsed = nullableString(value, name);
-  if (parsed !== null && !Number.isFinite(Date.parse(parsed))) throw new UnsupportedInputError(name + " must be an ISO-8601 timestamp or null");
+  if (parsed !== null && parseRfc3339DateTime(parsed) === null) {
+    throw new UnsupportedInputError(`${name} must be an RFC 3339 date-time or null; for example 2026-08-31T12:34:56Z`);
+  }
   return parsed;
 }
 
