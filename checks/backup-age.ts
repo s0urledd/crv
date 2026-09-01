@@ -1,5 +1,5 @@
 import type { CrvConfig } from "../config.js";
-import type { CaptureManifest } from "../manifest.js";
+import { parseRfc3339DateTime, type CaptureManifest } from "../manifest.js";
 import type { ArtifactInspection, CheckDefinition, CheckResult } from "../types.js";
 
 const definition: CheckDefinition = {
@@ -7,8 +7,8 @@ const definition: CheckDefinition = {
   severity: "error",
   evidenceClass: "recovery_prerequisite",
   title: "Latest participant state is inside a sourced sequencer horizon",
-  proves: "The captured participant state is not older than the supplied effective catch-up horizon.",
-  method: "Compare trusted capture completion time with verification time using a sourced horizon; never infer completion from file mtime.",
+  proves: "The captured participant state is not older than an operator-declared effective catch-up horizon that crv does not validate.",
+  method: "Compare trusted capture completion time with verification time using an operator-declared, unvalidated horizon; never infer completion from file mtime.",
   remediation: "Supply capture completion and a versioned documentation-policy or network-operator horizon, or take a new backup.",
 };
 
@@ -26,6 +26,7 @@ export function checkBackupAge(
   const horizon = config?.network.sequencerHorizonSeconds ?? null;
   const source = config?.network.sequencerHorizonSource ?? null;
   const warnFraction = config?.network.backupAgeWarnFraction ?? null;
+  const horizonEvidence = { horizonSeconds: horizon, horizonSource: source, horizonSourceValidated: false };
   const requiredEvidence: string[] = [];
   if (completedAt === null) requiredEvidence.push("Supply the participant capture completion time in a manifest.");
   if (horizon === null || source === null) requiredEvidence.push("Supply the effective sequencer retention horizon and its source; CRV does not silently assume 30 days.");
@@ -35,22 +36,22 @@ export function checkBackupAge(
       applicable: true,
       status: "UNKNOWN",
       summary: "Capture completion time and a sourced sequencer horizon were not both supplied.",
-      evidence: { captureCompletedAt: completedAt, horizonSeconds: horizon, horizonSource: source, fileMtimeUsed: false },
+      evidence: { captureCompletedAt: completedAt, ...horizonEvidence, fileMtimeUsed: false },
       requiredEvidence,
     };
   }
-  const capturedMs = Date.parse(completedAt as string);
-  if (!Number.isFinite(capturedMs) || horizon === null || horizon <= 0) {
+  const capturedMs = parseRfc3339DateTime(completedAt as string);
+  if (capturedMs === null || horizon === null || horizon <= 0) {
     return {
       ...definition, applicable: true, status: "FAIL", summary: "Capture completion or sequencer horizon is invalid.",
-      evidence: { captureCompletedAt: completedAt, horizonSeconds: horizon, horizonSource: source }, requiredEvidence: [],
+      evidence: { captureCompletedAt: completedAt, ...horizonEvidence }, requiredEvidence: [],
     };
   }
   const rawAgeSeconds = (now.getTime() - capturedMs) / 1000;
   if (rawAgeSeconds < -300) {
     return {
       ...definition, applicable: true, status: "FAIL", summary: "Capture completion is more than five minutes in the future.",
-      evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), horizonSeconds: horizon, horizonSource: source }, requiredEvidence: [],
+      evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), ...horizonEvidence }, requiredEvidence: [],
     };
   }
   const ageSeconds = Math.max(0, rawAgeSeconds);
@@ -62,8 +63,8 @@ export function checkBackupAge(
       ...definition,
       applicable: true,
       status: "FAIL",
-      summary: `Backup age ${Math.floor(ageSeconds)}s is not below the sourced ${horizon}s sequencer horizon.`,
-      evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds, horizonSeconds: horizon, horizonSource: source },
+      summary: `Backup age ${Math.floor(ageSeconds)}s is not below the operator-declared ${horizon}s sequencer horizon; crv does not validate its source.`,
+      evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds, ...horizonEvidence },
       requiredEvidence: [],
     };
   }
@@ -72,10 +73,10 @@ export function checkBackupAge(
       ...definition,
       applicable: true,
       status: "WARN",
-      summary: `Backup age ${Math.floor(ageSeconds)}s is below the sourced ${horizon}s sequencer horizon but exceeds the configured ${warnFraction} warning fraction (${Math.floor(warningThresholdSeconds)}s; config.network.backupAgeWarnFraction).`,
+      summary: `Backup age ${Math.floor(ageSeconds)}s is below the operator-declared ${horizon}s sequencer horizon but exceeds the configured ${warnFraction} warning fraction (${Math.floor(warningThresholdSeconds)}s; config.network.backupAgeWarnFraction); crv does not validate the horizon source.`,
       evidence: {
         captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds,
-        horizonSeconds: horizon, horizonSource: source, warnFraction,
+        ...horizonEvidence, warnFraction,
         warnThresholdSeconds: warningThresholdSeconds,
         warnFractionSource: "config.network.backupAgeWarnFraction",
       },
@@ -86,8 +87,8 @@ export function checkBackupAge(
     ...definition,
     applicable: true,
     status: "PASS",
-    summary: `Backup age ${Math.floor(ageSeconds)}s is below the sourced ${horizon}s sequencer horizon.`,
-    evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds, horizonSeconds: horizon, horizonSource: source },
+    summary: `Backup age ${Math.floor(ageSeconds)}s is below the operator-declared ${horizon}s sequencer horizon; crv does not validate its source.`,
+    evidence: { captureCompletedAt: completedAt, verificationTime: now.toISOString(), ageSeconds, ...horizonEvidence },
     requiredEvidence: [],
   };
 }

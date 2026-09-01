@@ -102,6 +102,27 @@ the default remains offline and Scan failure never fails a backup check.
 See [`docs/operator-guide.md`](docs/operator-guide.md) for read-only LSU evidence
 commands and safe periodic identities-export guidance.
 
+## What crv tells you before it hurts
+
+- Your newest backup is approaching the declared horizon: `backup.latest_age`
+  reports `WARN` once `backupAgeWarnFraction` is crossed. In a full-evidence
+  run (a drill with synchronizer inputs supplied) the verdict becomes
+  `AT_RISK` and the process exits 1; in fast `verify`/`watch` on a database
+  set the drill-only identity check keeps the verdict `INDETERMINATE`
+  (exit 3), so alert on `preconditions.warn > 0`, not on the exit code alone.
+- Capture ordering broke: `backup.offset_order` reports `FAIL` with both values,
+  for example `Validator offset 66 exceeds participant ledger end 65.`; the
+  precondition verdict is `FAILED` and the process exits 2.
+- Your identities export conflicts with the selected set: `crv drill` refuses
+  `conflicting evidence` before Docker starts and exits 65.
+- Your backup cron died: repeated `watch` reports show `backup.latest_age`
+  increasing; crossing the warning fraction raises `WARN` in the report (exit
+  semantics above); reaching the declared horizon reports `FAIL` and exits 2.
+- An LSU invalidated the retained set: `network.lsu_path` reports `FAIL` when an
+  operator-declared, unvalidated assertion says the captured synchronizer is
+  unavailable, and exits 2. Without that usability source it is `UNKNOWN` and
+  exits 3.
+
 
 Timing scope matters: 23.7 seconds measured only a warm `crv drill` after
 artifact capture with images cached. The 6m12s GitHub CI job included checkout,
@@ -171,6 +192,19 @@ Do not translate `MET` or structural `PASSED` into `RECOVERABLE`.
 
 Read the evidence in [`docs/discovery.md`](docs/discovery.md) and reproduce the
 CLI drill with [`experiments/08-cli-drill.sh`](experiments/08-cli-drill.sh).
+
+## Reproduce the claims
+
+From a fresh clone, run:
+
+```sh
+./experiments/00-reviewer-repro.sh
+```
+
+It installs dependencies, builds, runs the tests and CLI contracts, prints the
+good and reversed fixture verdicts, checks generated release notes, and runs one
+LocalNet isolated drill when a Docker daemon is available. Without Docker, the
+summary marks only that drill `SKIPPED`.
 
 ## Maintenance
 

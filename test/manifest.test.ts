@@ -44,6 +44,41 @@ test("writes relative digest references without mutating artifacts", async () =>
   }
 });
 
+test("requires RFC 3339 date-time manifest timestamps", async () => {
+  const set = await copyGoodSet();
+  try {
+    const path = await writeManifest(set.directory);
+    const manifest = await readManifest(path);
+
+    manifest.declared.captureCompletedAt = "2026-08-31T12:34:56Z";
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    assert.equal((await readManifest(path)).declared.captureCompletedAt, "2026-08-31T12:34:56Z");
+
+    manifest.declared.captureCompletedAt = "2026-08-31T14:34:56+02:00";
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    assert.equal((await readManifest(path)).declared.captureCompletedAt, "2026-08-31T14:34:56+02:00");
+
+    manifest.declared.captureCompletedAt = "2026-08-31T23:59:60Z";
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    assert.equal((await readManifest(path)).declared.captureCompletedAt, "2026-08-31T23:59:60Z");
+
+    for (const invalid of ["2026-02-30T12:34:56Z", "2026-08-31T24:00:00Z"]) {
+      manifest.declared.captureCompletedAt = invalid;
+      await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+      await assert.rejects(() => readManifest(path), /must be an RFC 3339 date-time/);
+    }
+
+    manifest.declared.captureCompletedAt = "2026-08-31";
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assert.rejects(
+      () => readManifest(path),
+      /manifest\.declared\.captureCompletedAt must be an RFC 3339 date-time or null; for example 2026-08-31T12:34:56Z/,
+    );
+  } finally {
+    await rm(set.directory, { recursive: true, force: true });
+  }
+});
+
 test("fails changed and missing manifest artifacts", async () => {
   const changed = await copyGoodSet();
   try {
