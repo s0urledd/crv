@@ -208,9 +208,8 @@ summary marks only that drill `SKIPPED`.
 
 ## Maintenance
 
-crv is maintained by the operators of a Canton Network MainNet validator.
-Engineering is AI-assisted; every change is human-reviewed, and behavior
-claims are validated on production infrastructure before release. Files under
-`docs/raw/` are unedited records of real runs.
+crv is maintained by Huginn Tech, operators of a Canton Network MainNet
+validator. Behavior claims are validated on production infrastructure before
+release; files under docs/raw/ are unedited records of real runs.
 
 License: MIT.
