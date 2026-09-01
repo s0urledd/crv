@@ -147,6 +147,20 @@ The endpoint and sensitivity warning are documented in the pinned
 [validator backup guide](https://github.com/hyperledger-labs/splice/blob/0.6.11/docs/src/validator_operator/validator_backups.rst); the client-credentials example is in the pinned
 [Keycloak compose guide](https://github.com/hyperledger-labs/splice/blob/0.6.11/docs/src/community/keycloak-docker-canton-validator-config.rst).
 
+### If you ever have to use it
+
+Recovery from an identities export must use the same validator party hint. On
+docker-compose, pass a new, never-used participant ID with `-P`, then pass that
+same new ID on every subsequent start. These are requirements of the pinned
+[Splice 0.6.11 recovery procedure](https://github.com/hyperledger-labs/splice/blob/0.6.11/docs/src/validator_operator/validator_disaster_recovery.rst#L119-L166),
+not conditions that crv proves.
+
+Users onboarded after the identities capture must be re-onboarded manually, as
+the pinned procedure [states explicitly](https://github.com/hyperledger-labs/splice/blob/0.6.11/docs/src/validator_operator/validator_disaster_recovery.rst#L68-L69).
+Parties hosted on multiple participants and external parties are not migrated
+automatically; follow the separate procedures linked in the pinned
+[limitations section](https://github.com/hyperledger-labs/splice/blob/0.6.11/docs/src/validator_operator/validator_disaster_recovery.rst#L202-L214).
+
 ## Run watch under systemd
 
 Point `watch` at a stable path that the existing backup process updates to the
