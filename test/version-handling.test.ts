@@ -24,7 +24,7 @@ function config(scanVersionUrl: string | null): CrvConfig {
       capturedPhysicalSynchronizerUsable: null,
       capturedPhysicalSynchronizerUsabilitySource: null,
     },
-    watch: { statePath: ".crv/state.json", reportsPath: "crv-reports", intervalSeconds: 86400 },
+    watch: { statePath: ".crv/state.json", reportsPath: "crv-reports", intervalSeconds: 86400, heartbeatUrl: null },
   };
 }
 

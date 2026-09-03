@@ -118,6 +118,8 @@ commands and safe periodic identities-export guidance.
 - Your backup cron died: repeated `watch` reports show `backup.latest_age`
   increasing; crossing the warning fraction raises `WARN` in the report (exit
   semantics above); reaching the declared horizon reports `FAIL` and exits 2.
+  Configure `watch.heartbeatUrl` to make a missed ping the direct detector that
+  `watch` itself stopped.
 - An LSU invalidated the retained set: `network.lsu_path` reports `FAIL` when an
   operator-declared, unvalidated assertion says the captured synchronizer is
   unavailable, and exits 2. Without that usability source it is `UNKNOWN` and

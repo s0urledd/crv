@@ -12,6 +12,10 @@ interface WatchState {
   schemaVersion: "1.0";
   subject: string;
   lastVerdict: PreconditionsVerdict;
+  lastHeartbeat?: {
+    at: string;
+    ok: boolean;
+  };
   lastReport: string;
   lastRunAt: string;
 }
@@ -39,6 +43,30 @@ async function atomicWrite(path: string, contents: string): Promise<void> {
   }
 }
 
+function heartbeatTarget(base: string, verdict: PreconditionsVerdict): string {
+  if (verdict !== "FAILED") return base;
+  const target = new URL(base);
+  target.pathname = `${target.pathname.replace(/\/+$/, "")}/fail`;
+  return target.toString();
+}
+
+async function sendHeartbeat(base: string, verdict: PreconditionsVerdict): Promise<{ at: string; ok: boolean }> {
+  const at = new Date().toISOString();
+  let ok = false;
+  try {
+    const response = await fetch(heartbeatTarget(base, verdict), {
+      method: "GET",
+      signal: AbortSignal.timeout(10_000),
+    });
+    ok = response.ok;
+    if (response.body !== null) await response.body.cancel().catch(() => undefined);
+  } catch {
+    // Heartbeats are observational; their failure must not alter backup evidence.
+  }
+  process.stderr.write(`crv watch: heartbeat ${ok ? "ok" : "failed"}\n`);
+  return { at, ok };
+}
+
 async function previousState(path: string, subject: string): Promise<WatchState | null> {
   let text: string;
   try {
@@ -56,6 +84,14 @@ async function previousState(path: string, subject: string): Promise<WatchState 
   }
   const verdicts: PreconditionsVerdict[] = ["MET", "AT_RISK", "FAILED", "INDETERMINATE"];
   if (value.schemaVersion !== "1.0" || value.subject !== subject || !verdicts.includes(value.lastVerdict as PreconditionsVerdict)) {
+    throw new UnsupportedInputError("watch state does not match schema or subject: " + path);
+  }
+  if (value.lastHeartbeat !== undefined && (
+    typeof value.lastHeartbeat !== "object"
+    || value.lastHeartbeat === null
+    || typeof value.lastHeartbeat.at !== "string"
+    || typeof value.lastHeartbeat.ok !== "boolean"
+  )) {
     throw new UnsupportedInputError("watch state does not match schema or subject: " + path);
   }
   return value as WatchState;
@@ -85,12 +121,16 @@ export async function runWatchCycle(
   const previous = await previousState(statePath, input);
   const regression = previous !== null && rank(report.preconditions.verdict) > rank(previous.lastVerdict);
   await atomicWrite(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  const lastHeartbeat = settings.watch.heartbeatUrl === null
+    ? null
+    : await sendHeartbeat(settings.watch.heartbeatUrl, report.preconditions.verdict);
   const state: WatchState = {
     schemaVersion: "1.0",
     subject: input,
     lastVerdict: report.preconditions.verdict,
     lastReport: reportPath,
     lastRunAt: report.generatedAt,
+    ...(lastHeartbeat === null ? {} : { lastHeartbeat }),
   };
   await atomicWrite(statePath, `${JSON.stringify(state, null, 2)}\n`);
   return {

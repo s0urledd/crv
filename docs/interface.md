@@ -92,9 +92,13 @@ was the live deployment's effective database name.
 `crv init-config [path]` writes a commented, runnable `crv.yaml` and refuses to
 overwrite an existing file. Pass it with `--config <path>`. A horizon has no
 evidentiary value without `sequencerHorizonSource`; an LSU usability assertion
-likewise requires its source. An optional `network.backupAgeWarnFraction` must
-be greater than 0 and less than 1. When configured, an age strictly above that
-fraction of the sourced horizon is `WARN`, so otherwise-complete preconditions
+likewise requires its source.
+Example: "SV 30-day pruning window (DA, 2026-08-31): [https://github.com/canton-foundation/canton-dev-fund/pull/750](https://github.com/canton-foundation/canton-dev-fund/pull/750)". Re-verify
+the horizon against current network announcements when configuring it.
+
+An optional `network.backupAgeWarnFraction` must be greater than 0 and
+less than 1. When configured, an age strictly above that fraction of the
+sourced horizon is `WARN`, so otherwise-complete preconditions
 become `AT_RISK` and exit 1. Equality remains `PASS`; null disables the warning
 and crv assumes no threshold.
 `sequencerHorizonSource` and
@@ -138,3 +142,10 @@ While the verdict is `MET`, the same process waits `intervalSeconds` and runs
 again. Any non-zero verdict exits with that verdict's code after persistence;
 a worsening from prior state is also named as a regression on stderr. Invalid
 state is an error, never a silent new baseline.
+
+Set optional `watch.heartbeatUrl` to send one dead-man's-switch GET after the
+report is written. Any verdict except `FAILED` targets the configured URL;
+`FAILED` appends `/fail`. The outcome is stored as `lastHeartbeat: { at, ok }`
+and named once on stderr, but never changes the report, verdict, or exit code.
+Wire the operator's existing monitor so silence means alarm. A service without a
+`/fail` endpoint will miss that ping and its silence alarm still applies.

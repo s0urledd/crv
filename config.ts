@@ -26,6 +26,7 @@ export interface CrvConfig {
     statePath: string;
     reportsPath: string;
     intervalSeconds: number;
+    heartbeatUrl: string | null;
   };
 }
 
@@ -49,6 +50,7 @@ network:
   # Effective sequencer catch-up horizon. crv never assumes 30 days silently.
   sequencerHorizonSeconds: null
   # Versioned documentation URL/reference or network-operator source.
+  # Example: "SV 30-day pruning window (DA, 2026-08-31): [https://github.com/canton-foundation/canton-dev-fund/pull/750](https://github.com/canton-foundation/canton-dev-fund/pull/750)"
   sequencerHorizonSource: null
   # Optional warning threshold as a fraction of the sourced horizon (0 < value < 1).
   # Leave null to disable age warnings; crv assumes no fraction silently.
@@ -66,6 +68,8 @@ watch:
   statePath: .crv/state.json
   reportsPath: crv-reports
   intervalSeconds: 86400
+  # Optional dead-man's-switch ping. Leave commented to keep watch offline.
+  # heartbeatUrl: https://monitor.example/ping/crv
 `;
 
 function object(value: unknown, name: string): Record<string, unknown> {
@@ -84,16 +88,28 @@ function nullableString(value: unknown, name: string): string | null {
   return value;
 }
 
-function nullableHttpUrl(value: unknown, name: string): string | null {
+function nullableAbsoluteHttpUrl(value: unknown, name: string): URL | null {
   const parsed = nullableString(value, name);
   if (parsed === null) return null;
   let url: URL;
   try { url = new URL(parsed); } catch { throw new UnsupportedInputError(`${name} must be an absolute HTTP(S) URL or null`); }
-  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password ||
-      url.pathname !== "/api/scan/version" || url.search || url.hash) {
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password || url.search || url.hash) {
+    throw new UnsupportedInputError(`${name} must be an absolute HTTP(S) URL without credentials, query, or fragment, or null`);
+  }
+  return url;
+}
+
+function nullableHttpUrl(value: unknown, name: string): string | null {
+  const url = nullableAbsoluteHttpUrl(value, name);
+  if (url === null) return null;
+  if (url.pathname !== "/api/scan/version") {
     throw new UnsupportedInputError(`${name} must be an HTTP(S) /api/scan/version URL without credentials, query, or fragment`);
   }
   return url.toString();
+}
+
+function nullableHeartbeatUrl(value: unknown, name: string): string | null {
+  return nullableAbsoluteHttpUrl(value, name)?.toString() ?? null;
 }
 
 function nullableInteger(value: unknown, name: string): number | null {
@@ -141,7 +157,7 @@ export async function loadConfig(path: string): Promise<CrvConfig> {
     "currentPhysicalSynchronizerSerial", "capturedPhysicalSynchronizerUsable",
     "capturedPhysicalSynchronizerUsabilitySource",
   ], "config.network");
-  keys(watch, ["statePath", "reportsPath", "intervalSeconds"], "config.watch");
+  keys(watch, ["statePath", "reportsPath", "intervalSeconds", "heartbeatUrl"], "config.watch");
   const usable = network.capturedPhysicalSynchronizerUsable;
   if (usable !== null && usable !== undefined && typeof usable !== "boolean") {
     throw new UnsupportedInputError("config.network.capturedPhysicalSynchronizerUsable must be boolean or null");
@@ -167,6 +183,7 @@ export async function loadConfig(path: string): Promise<CrvConfig> {
       statePath: requiredString(watch.statePath ?? ".crv/state.json", "config.watch.statePath"),
       reportsPath: requiredString(watch.reportsPath ?? "crv-reports", "config.watch.reportsPath"),
       intervalSeconds: requiredPositiveInteger(watch.intervalSeconds ?? 86400, "config.watch.intervalSeconds"),
+      heartbeatUrl: nullableHeartbeatUrl(watch.heartbeatUrl, "config.watch.heartbeatUrl"),
     },
   };
 }
