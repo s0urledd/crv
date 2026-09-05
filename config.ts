@@ -50,7 +50,7 @@ network:
   # Effective sequencer catch-up horizon. crv never assumes 30 days silently.
   sequencerHorizonSeconds: null
   # Versioned documentation URL/reference or network-operator source.
-  # Example: "SV 30-day pruning window (DA, 2026-08-31): [https://github.com/canton-foundation/canton-dev-fund/pull/750](https://github.com/canton-foundation/canton-dev-fund/pull/750)"
+  # Example: "SV 30-day pruning window (DA, 2026-08-31): https://github.com/canton-foundation/canton-dev-fund/pull/750"
   sequencerHorizonSource: null
   # Optional warning threshold as a fraction of the sourced horizon (0 < value < 1).
   # Leave null to disable age warnings; crv assumes no fraction silently.
