@@ -172,6 +172,8 @@ watch:
   statePath: /var/lib/crv/state.json
   reportsPath: /var/lib/crv/reports
   intervalSeconds: 21600
+  # Optional dead-man's-switch URL; leave commented to keep watch offline.
+  # heartbeatUrl: https://monitor.example/ping/crv
 ```
 
 Install the built CLI, then run one long-lived process:
@@ -198,6 +200,13 @@ waits `intervalSeconds` and verifies the input path again. Do not also launch it
 from recurring cron: successful runs remain alive. On every cycle it writes a
 schema 1.2 JSON report under `reportsPath` and atomically replaces `statePath`;
 relative paths resolve from the config directory.
+
+Set `heartbeatUrl` to send one dead-man's-switch GET after each report is
+written. Non-`FAILED` verdicts use the configured URL; `FAILED` appends
+`/fail`. A timeout, connection error, or non-2xx response writes
+`lastHeartbeat.ok: false` to watch state and one stderr line without changing
+the report, verdict, or exit code. Configure the operator's existing monitor so
+silence means alarm; a service without `/fail` simply misses the failure ping.
 
 A non-MET result is persisted before the process exits: `AT_RISK` exits 1,
 `FAILED` exits 2, and `INDETERMINATE` exits 3. Invalid input/config exits 65;

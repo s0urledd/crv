@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -44,7 +44,7 @@ const config = (): CrvConfig => ({
     capturedPhysicalSynchronizerUsable: null,
     capturedPhysicalSynchronizerUsabilitySource: null,
   },
-  watch: { statePath: ".crv/state.json", reportsPath: "crv-reports", intervalSeconds: 86400 },
+  watch: { statePath: ".crv/state.json", reportsPath: "crv-reports", intervalSeconds: 86400, heartbeatUrl: null },
 });
 
 test("age uses supplied horizon and fails at the boundary", async () => {
@@ -126,14 +126,34 @@ test("init-config is runnable, strict, and refuses overwrite", async () => {
   const path = join(directory, "crv.yaml");
   try {
     await writeInitialConfig(path);
+    const template = await readFile(path, "utf8");
     const parsed = await loadConfig(path);
     assert.equal(parsed.watch.statePath, ".crv/state.json");
+    assert.equal(parsed.watch.heartbeatUrl, null);
     assert.equal(parsed.network.sequencerHorizonSeconds, null);
     assert.equal(parsed.network.backupAgeWarnFraction, null);
+    assert.match(template, /# heartbeatUrl: https:\/\/monitor\.example\/ping\/crv/);
     await assert.rejects(() => writeInitialConfig(path), UnsupportedInputError);
 
     await writeFile(path, 'schemaVersion: "1.0"\nnetwork:\n  typo: 30\n');
     await assert.rejects(() => loadConfig(path), /unknown key/);
+
+    for (const url of ["http://monitor.example/ping/crv", "https://monitor.example/ping/crv"]) {
+      await writeFile(path, `schemaVersion: "1.0"\nwatch:\n  heartbeatUrl: ${url}\n`);
+      assert.equal((await loadConfig(path)).watch.heartbeatUrl, url);
+    }
+
+    for (const url of [
+      "ftp://monitor.example/ping/crv",
+      "https://user@monitor.example/ping/crv",
+      "https://monitor.example/ping/crv?token=secret",
+    ]) {
+      await writeFile(path, `schemaVersion: "1.0"\nwatch:\n  heartbeatUrl: ${url}\n`);
+      await assert.rejects(
+        () => loadConfig(path),
+        /config\.watch\.heartbeatUrl must be an absolute HTTP\(S\) URL/,
+      );
+    }
 
     for (const fraction of [0, 1, -0.1, 1.1]) {
       await writeFile(path, `schemaVersion: "1.0"\nnetwork:\n  backupAgeWarnFraction: ${fraction}\n`);

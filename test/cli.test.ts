@@ -50,3 +50,20 @@ test("inspect directs directory inputs to verify", () => {
   assert.equal(result.status, 65);
   assert.match(result.stderr, /crv inspect takes a file; use crv verify for a directory: \./);
 });
+
+test("watch rejects an invalid heartbeat URL with exit 65 and names the field", async () => {
+  const root = await mkdtemp(join(tmpdir(), "crv-cli-heartbeat-"));
+  const configPath = join(root, "crv.yaml");
+  try {
+    await writeFile(configPath, 'schemaVersion: "1.0"\nwatch:\n  heartbeatUrl: not-a-url\n');
+    const result = spawnSync(
+      process.execPath,
+      [cli, "watch", fixture("good"), "--config", configPath, "--json"],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 65);
+    assert.match(result.stderr, /config\.watch\.heartbeatUrl/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
